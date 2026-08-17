@@ -1,0 +1,30 @@
+# Match execution plugin (temporary match servers).
+server-id: game
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+
+# Arena of this temporary server. One match per server: spawns are indexed
+# by team position in the match instructions.
+arena:
+  world: world
+  timeout-seconds: 300
+  explosion:
+    power: 3.0
+    fire: false
+    break-blocks: false
+  spawns:
+    - x: 0.0
+      y: 64.0
+      z: 0.0
+      yaw: 0.0
+    - x: 20.0
+      y: 64.0
+      z: 0.0
+      yaw: 180.0
+    - x: -20.0
+      y: 64.0
+      z: 0.0
+      yaw: 0.0

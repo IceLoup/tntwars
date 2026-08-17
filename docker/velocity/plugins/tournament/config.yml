@@ -1,0 +1,32 @@
+# Velocity plugin configuration for the Docker Compose stack. Service names
+# of the compose file are used as hostnames; docker.enabled=true switches
+# provisioning to real containers on the "tournament" network.
+tournament:
+  max-teams-per-match: 3
+  players-per-team: 3
+
+server:
+  template: game
+  startup-timeout: 60
+  shutdown-timeout: 15
+  docker:
+    enabled: true
+    image: tournament-match:latest
+    network: tournament
+    port: 25565
+    command: docker
+
+redis:
+  host: redis
+  port: 6379
+  password: ""
+
+database:
+  host: postgres
+  port: 5432
+  database: tournament
+  username: tournament
+  password: tournament
+
+lobby:
+  server: lobby

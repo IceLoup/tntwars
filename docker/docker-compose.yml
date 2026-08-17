@@ -1,0 +1,49 @@
+name: tournament
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [tournament]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tournament
+      POSTGRES_USER: tournament
+      POSTGRES_PASSWORD: tournament
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [tournament]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tournament -d tournament"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  velocity:
+    build: ./velocity
+    image: tournament-velocity:latest
+    restart: unless-stopped
+    ports:
+      - "25577:25577"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks: [tournament]
+
+networks:
+  tournament:
+    name: tournament
+    driver: bridge
+
+volumes:
+  pgdata:

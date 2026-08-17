@@ -1,0 +1,33 @@
+# Match plugin configuration for template containers. The server id and the
+# Redis connection are injected at provisioning time through environment
+# variables (TOURNAMENT_SERVER_ID, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD)
+# and override the values below. The "arena" world is generated on first
+# boot (level-name in server.properties); replace it with a real map if you
+# want custom terrain.
+server-id: game
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+
+arena:
+  world: arena
+  timeout-seconds: 300
+  explosion:
+    power: 3.0
+    fire: false
+    break-blocks: false
+  spawns:
+    - x: 0.0
+      y: 64.0
+      z: 0.0
+      yaw: 0.0
+    - x: 20.0
+      y: 64.0
+      z: 0.0
+      yaw: 180.0
+    - x: -20.0
+      y: 64.0
+      z: 0.0
+      yaw: 0.0

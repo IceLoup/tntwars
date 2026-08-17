@@ -1,0 +1,10 @@
+{
+  "id": "tournament",
+  "name": "Tournament",
+  "version": "1.0.0-SNAPSHOT",
+  "description": "Minecraft 3-player team tournament platform",
+  "authors": [
+    "IceLoup"
+  ],
+  "main": "xyz.pyxismc.tournament.velocity.TournamentVelocityPlugin"
+}

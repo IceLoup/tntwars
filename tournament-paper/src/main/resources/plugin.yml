@@ -1,0 +1,10 @@
+name: tournament
+description: $description
+version: '${version}'
+
+main: xyz.pyxismc.tournament.paper.TournamentPaperPlugin
+api-version: '26.2'
+load: STARTUP
+
+authors: [ IceLoup ]
+website: https://pyxismc.xyz
