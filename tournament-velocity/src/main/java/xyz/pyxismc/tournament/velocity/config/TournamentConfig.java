@@ -157,7 +157,7 @@ public final class TournamentConfig {
                         "game",
                         Duration.ofSeconds(30),
                         Duration.ofSeconds(15),
-                        new DockerSettings(false, "tournament-match", "tournament", 25565, "docker")),
+                        new DockerSettings(false, "tournament-gameserver", "tournament", 25565, "docker")),
                 new RedisSettings("localhost", 6379, ""),
                 new DatabaseSettings("localhost", 5432, "tournament", "tournament", ""),
                 new LobbySettings("lobby"));

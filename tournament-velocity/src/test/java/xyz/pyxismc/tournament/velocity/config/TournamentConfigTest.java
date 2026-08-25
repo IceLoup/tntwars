@@ -29,7 +29,7 @@ class TournamentConfigTest {
         assertEquals(Duration.ofSeconds(30), config.server().startupTimeout());
         assertEquals(Duration.ofSeconds(15), config.server().shutdownTimeout());
         assertEquals(false, config.server().docker().enabled());
-        assertEquals("tournament-match", config.server().docker().image());
+        assertEquals("tournament-gameserver", config.server().docker().image());
         assertEquals("tournament", config.server().docker().network());
         assertEquals(25565, config.server().docker().port());
         assertEquals("docker", config.server().docker().command());

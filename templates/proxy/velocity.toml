@@ -1,6 +1,6 @@
 # Tournament Velocity proxy (temporary match servers are registered at
 # runtime by the plugin, so no static [servers] entries are needed).
-bind = "0.0.0.0:29020"
+bind = "0.0.0.0:2920"
 motd = "Tournament Platform"
 show-max-players = 500
 online-mode = true
@@ -13,6 +13,8 @@ ping-passthrough = "DISABLED"
 enable-player-address-logging = true
 
 [servers]
+# Persistent lobby server (entry point for players)
+lobby = "lobby:25565"
 
 [forced-hosts]
 

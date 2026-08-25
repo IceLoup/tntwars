@@ -1,3 +1,8 @@
+# Tournament Platform Docker Compose Stack
+# Uses pre-built template images from templates/ (built via docker/build.sh)
+# Services: redis, postgres, velocity (proxy), lobby (persistent entry point)
+# Match servers are provisioned dynamically as containers from tournament-gameserver image.
+
 name: tournament
 
 services:
@@ -28,15 +33,26 @@ services:
       retries: 10
 
   velocity:
-    build: ./velocity
     image: tournament-velocity:latest
     restart: unless-stopped
     ports:
-      - "25577:25577"
+      - "2920:2920"
     depends_on:
       redis:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+    networks: [tournament]
+
+  lobby:
+    image: tournament-lobby:latest
+    restart: unless-stopped
+    # Lobby is accessible internally on the tournament network for Velocity forwarding
+    # Expose externally only if you want direct access (optional)
+    # ports:
+    #   - "25566:25565"
+    depends_on:
+      redis:
         condition: service_healthy
     networks: [tournament]
 

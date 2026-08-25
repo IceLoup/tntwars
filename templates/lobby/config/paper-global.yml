@@ -1,0 +1,7 @@
+# Modern (Velocity) player info forwarding. The secret MUST match
+# forwarding-secret in the Velocity velocity.toml.
+proxies:
+  velocity:
+    enabled: true
+    online-mode: true
+    secret: "tournament-dev-secret-change-me"

@@ -1,40 +1,59 @@
-# Docker Compose stack
+# Tournament Platform Docker Stack
 
 Runs the whole tournament platform: a Velocity proxy with the tournament
-plugin, PostgreSQL (persistence) and Redis (Velocity <-> Paper messaging).
-Temporary match servers are started on demand by the plugin as containers of
-the `tournament-match:latest` template image, on the `tournament` network.
+plugin, PostgreSQL (persistence), Redis (Velocity ↔ Paper messaging), and a
+persistent Lobby server. Temporary match servers are started on demand by the
+plugin as containers from the `tournament-gameserver:latest` template image.
 
 ## Layout
 
-| Path                    | Purpose                                          |
-| ----------------------- | ------------------------------------------------ |
-| `docker-compose.yml`    | redis + postgres + velocity services             |
-| `velocity/`             | Docker context of the proxy image                |
-| `match/`                | Docker context of the match template image       |
-| `build.sh`              | `mvn package`, stages jars, builds and starts    |
+```
+tntwarsgame/
+├── templates/               # Reusable template images (build once, deploy many)
+│   ├── proxy/               # Velocity proxy template
+│   │   ├── Dockerfile
+│   │   ├── velocity.toml
+│   │   └── plugins/tournament/config.yml
+│   ├── gameserver/          # Match/game server template (Paper)
+│   │   ├── Dockerfile
+│   │   ├── server.properties
+│   │   ├── eula.txt
+│   │   ├── config/paper-global.yml
+│   │   └── plugins/tournament/config.yml
+│   └── lobby/               # Persistent lobby server template
+│       ├── Dockerfile
+│       ├── server.properties
+│       ├── eula.txt
+│       ├── config/paper-global.yml
+│       └── plugins/
+├── docker/
+│   ├── docker-compose.yml   # Uses pre-built template images
+│   ├── build.sh             # Builds all 3 template images (+ stages jars)
+│   └── templates.env        # Optional: override image tags, ports
+```
 
 ## Quick start
 
 ```bash
-# Linux, with Docker + Maven + JDK 21/25 available
+# Linux/macOS/WSL with Docker + Maven + JDK 21+
 ./docker/build.sh
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-The proxy listens on `localhost:25577`. Create teams and start the tournament
+The proxy listens on **`localhost:29020`**. Create teams and start the tournament
 with `/team create <name>`, `/tournament start` (permissions `tournament.*`).
-Matches are provisioned as containers automatically and the next round starts
-when all matches of the current round have reported their result.
+Players connect to the lobby first; when the tournament starts they are
+transferred to match servers automatically.
 
 ## How a match starts
 
-1. The velocity plugin starts a container `game-<matchId8>` from
-   `tournament-match:latest` on the `tournament` network
+1. Velocity plugin starts a container `game-<matchId8>` from
+   `tournament-gameserver:latest` on the `tournament` network
    (`docker run` via the `docker` CLI).
 2. Environment variables (`TOURNAMENT_SERVER_ID`, `REDIS_HOST/PORT`,
-   `REDIS_PASSWORD`) tell the Paper plugin who it is and where Redis lives.
-3. The plugin waits for the container IP (`docker inspect`), registers it in
-   Velocity and publishes the match instructions on Redis.
+   `REDIS_PASSWORD`) tell the Paper plugin its identity and Redis location.
+3. Plugin waits for container IP (`docker inspect`), registers it in Velocity,
+   publishes match instructions on Redis.
 4. Paper acknowledges readiness, Velocity transfers the players, the match
    runs (TNT wars kit, eliminations, timeout).
 5. Paper publishes the result; Velocity validates and records it; the match
@@ -42,38 +61,47 @@ when all matches of the current round have reported their result.
 
 ## Configuration
 
-- Velocity plugin config: `velocity/plugins/tournament/config.yml` — Redis and
-  PostgreSQL hostnames are the compose service names; `server.docker.enabled`
-  must stay `true` here.
-- Proxy settings: `velocity/velocity.toml` — bind, `forwarding-secret`.
-- Match settings: `match/plugins/tournament/config.yml` (arena world, spawns,
-  explosion, timeout) and `match/config/paper-global.yml` (velocity forwarding
-  secret — must match `velocity.toml`).
-- The arena world is generated as a void world with obsidian pads at the
-  configured spawns if it does not exist; drop a real world into the image
-  (e.g. `match/world/`) to use custom terrain.
+| File | Purpose |
+|------|---------|
+| `templates/proxy/plugins/tournament/config.yml` | Redis/PostgreSQL hostnames (compose service names), `server.docker.image: tournament-gameserver:latest`, `server.docker.enabled: true` |
+| `templates/proxy/velocity.toml` | Bind address (`0.0.0.0:29020`), `forwarding-secret`, static `lobby` server entry |
+| `templates/gameserver/plugins/tournament/config.yml` | Arena world, spawns, explosion, timeout |
+| `templates/gameserver/config/paper-global.yml` | Velocity forwarding secret (must match `velocity.toml`) |
+| `templates/lobby/config/paper-global.yml` | Same forwarding secret for lobby |
+
+The arena world is generated as a void world with obsidian pads at the
+configured spawns if it does not exist; drop a real world into the template
+(e.g. `templates/gameserver/world/`) to use custom terrain.
 
 ## Updating versions
 
 Paper and Velocity jars are pinned to the builds the plugins are compiled
-against. Bump them with `docker build --build-arg PAPER_URL=...` /
-`--build-arg VELOCITY_URL=...` (URLs from
-`https://fill.papermc.io/v3/projects/paper` or `.../velocity`), and update
-the `paper-api`/`velocity-api` versions in the parent `pom.xml` first.
+against. Bump them with:
+```bash
+docker build --build-arg PAPER_URL=... templates/gameserver
+docker build --build-arg PAPER_URL=... templates/lobby
+docker build --build-arg VELOCITY_URL=... templates/proxy
+```
+(URLs from `https://fill.papermc.io/v3/projects/paper` or `.../velocity`), and
+update the `paper-api`/`velocity-api` versions in the parent `pom.xml` first.
 
-## Local development
+## Template versioning
 
-Run the stack without Docker provisioning (no daemon needed):
+`docker/build.sh` tags images with both `latest` and a version tag
+(`<tag-suffix>-<git-sha>`). Use `--push` to push to a registry, `--tag` to
+customize the suffix, `--no-cache` to force rebuild.
+
+## Local development (no Docker daemon)
 
 ```bash
-# edit velocity/plugins/tournament/config.yml: server.docker.enabled=false
+# Set server.docker.enabled=false in templates/proxy/plugins/tournament/config.yml
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Matches are then "simulated" (no containers): the provisioning flow and the
-queue are exercised, but no Paper server acknowledges the match, so a match
-stays RUNNING until a real server reports its result. Use this mode to test
-team/tournament commands and persistence against PostgreSQL.
+Matches are "simulated" (no containers): the provisioning flow and queue are
+exercised, but no Paper server acknowledges the match, so a match stays
+RUNNING until a real server reports its result. Use this to test team/tournament
+commands and persistence against PostgreSQL.
 
 ## Cleanup
 
