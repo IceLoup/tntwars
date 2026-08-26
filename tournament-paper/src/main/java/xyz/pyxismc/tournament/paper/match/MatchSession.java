@@ -138,10 +138,20 @@ public final class MatchSession {
         return this.eliminated.contains(playerId);
     }
 
+    /** True if the player is still alive in the match. */
+    public boolean isAlive(UUID playerId) {
+        return this.playerToTeam.containsKey(playerId) && !this.eliminated.contains(playerId);
+    }
+
     /** Kills credited to a player so far. */
     public long killsOf(UUID playerId) {
         Stats stats = this.stats.get(playerId);
         return stats == null ? 0 : stats.kills;
+    }
+
+    /** Total kills credited to a team so far. */
+    public long kills(UUID teamId) {
+        return this.teamKills.getOrDefault(teamId, 0L);
     }
 
     /** True when exactly one team still has alive members. */
@@ -192,7 +202,7 @@ public final class MatchSession {
 
     /** A player left the server: its member slot is lost (no death stat). */
     public void onPlayerQuit(UUID playerId) {
-        if (this.stats.containsKey(playerId)) {
+        if (this.stats.containsKey(playerId) && !this.eliminated.contains(playerId)) {
             this.lastDamager.remove(playerId);
             eliminateMember(playerId);
         }
@@ -247,6 +257,7 @@ public final class MatchSession {
         if (teamId == null) {
             return;
         }
+        this.eliminated.add(playerId);
         int remaining = this.aliveByTeam.getOrDefault(teamId, 0);
         if (remaining <= 0) {
             return;

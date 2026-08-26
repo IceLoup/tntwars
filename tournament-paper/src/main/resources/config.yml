@@ -15,16 +15,70 @@ arena:
     power: 3.0
     fire: false
     break-blocks: false
-  spawns:
-    - x: 0.0
-      y: 64.0
-      z: 0.0
-      yaw: 0.0
-    - x: 20.0
-      y: 64.0
-      z: 0.0
-      yaw: 180.0
-    - x: -20.0
-      y: 64.0
-      z: 0.0
-      yaw: 0.0
+  # Three team slots, in match-team order. The premade lobby teams keep their
+  # composition and are assigned to these slots in the order Velocity sends
+  # them. Each slot defines one spawn per player of the team (3 players).
+  teams:
+    - color: aqua
+      display-name: Aqua
+      spawns:
+        - { x: -1.5, y: 64.0, z: -41.5, yaw: 0.0, pitch: 0.0 }
+        - { x: 0.0,  y: 64.0, z: -40.0, yaw: 0.0, pitch: 0.0 }
+        - { x: 1.5,  y: 64.0, z: -41.5, yaw: 0.0, pitch: 0.0 }
+    - color: rose_pastel
+      display-name: Rose Pastel
+      spawns:
+        - { x: -36.5, y: 64.0, z: 18.5, yaw: 225.0, pitch: 0.0 }
+        - { x: -35.0, y: 64.0, z: 20.0, yaw: 225.0, pitch: 0.0 }
+        - { x: -33.5, y: 64.0, z: 21.5, yaw: 225.0, pitch: 0.0 }
+    - color: lime
+      display-name: Lime
+      spawns:
+        - { x: 33.5, y: 64.0, z: 18.5, yaw: 135.0, pitch: 0.0 }
+        - { x: 35.0, y: 64.0, z: 20.0, yaw: 135.0, pitch: 0.0 }
+        - { x: 36.5, y: 64.0, z: 21.5, yaw: 135.0, pitch: 0.0 }
+
+# TNTWars kit given to every player on spawn. Enchantment values are vanilla
+# registry keys mapped to levels. No armor is given in this mode.
+# "tnt infinis": the plugin refunds one TNT each time a player places one.
+# "pas de sources d'eau infini": WATER_SOURCE_CONVERSION is set to false.
+kit:
+  inventory:
+    # --- Hotbar ---
+    - { slot: 0, material: TNT, amount: 64 }
+    - { slot: 1, material: WOODEN_SPEAR, enchantments: { knockback: 2 } }
+    - { slot: 2, material: FLINT_AND_STEEL, enchantments: { unbreaking: 3 } }
+    - { slot: 3, material: DIAMOND_PICKAXE, enchantments: { unbreaking: 3 } }
+    - { slot: 4, material: IRON_AXE, enchantments: { unbreaking: 3 } }
+    - { slot: 5, material: FISHING_ROD, enchantments: { unbreaking: 3 } }
+    - { slot: 6, material: WATER_BUCKET }
+    - { slot: 7, material: SPYGLASS }
+    - { slot: 8, material: COOKED_BEEF, amount: 32 }
+    # --- Main inventory ---
+    - { slot: 9, material: OBSERVER, amount: 64 }
+    - { slot: 10, material: DISPENSER, amount: 12 }
+    - { slot: 11, material: REDSTONE_TORCH, amount: 64 }
+    - { slot: 12, material: REPEATER, amount: 64 }
+    - { slot: 13, material: COMPARATOR, amount: 64 }
+    - { slot: 14, material: REDSTONE, amount: 64 }
+    - { slot: 15, material: REDSTONE_BLOCK, amount: 64 }
+    - { slot: 16, material: PISTON, amount: 64 }
+    - { slot: 17, material: STICKY_PISTON, amount: 64 }
+    - { slot: 18, material: OAK_LOG, amount: 64 }
+    - { slot: 19, material: OAK_PLANKS, amount: 64 }
+    - { slot: 20, material: COBBLESTONE, amount: 64 }
+    - { slot: 21, material: COBBLESTONE, amount: 64 }
+    - { slot: 22, material: COBBLESTONE, amount: 64 }
+    - { slot: 23, material: COBBLESTONE, amount: 64 }
+    - { slot: 24, material: END_STONE, amount: 24 }
+    - { slot: 25, material: DRIPSTONE_BLOCK, amount: 64 }
+    - { slot: 26, material: SPONGE, amount: 64 }
+    - { slot: 27, material: SLIME_BLOCK, amount: 64 }
+    - { slot: 28, material: HONEY_BLOCK, amount: 64 }
+    - { slot: 29, material: COBWEB, amount: 16 }
+
+# What happens when the match is over: wait a few seconds then send all
+# players back to the lobby and shut the server down.
+finish:
+  shutdown-delay-seconds: 5
+  lobby-server: lobby

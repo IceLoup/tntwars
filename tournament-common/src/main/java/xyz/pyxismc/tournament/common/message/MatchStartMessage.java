@@ -16,6 +16,7 @@ public record MatchStartMessage(
         String serverId,
         String tournamentName,
         List<UUID> teamIds,
+        Map<UUID, String> teamNames,
         Map<UUID, List<UUID>> playersByTeam,
         int playersPerTeam
 ) {
@@ -25,10 +26,14 @@ public record MatchStartMessage(
         Objects.requireNonNull(serverId, "serverId");
         Objects.requireNonNull(tournamentName, "tournamentName");
         teamIds = List.copyOf(teamIds);
+        teamNames = Map.copyOf(teamNames);
         playersByTeam = Map.copyOf(playersByTeam);
         if (playersByTeam.keySet().size() != teamIds.size()
                 || !playersByTeam.keySet().containsAll(teamIds)) {
             throw new IllegalArgumentException("playersByTeam must map exactly the team ids");
+        }
+        if (!teamNames.keySet().containsAll(teamIds)) {
+            throw new IllegalArgumentException("teamNames must contain every team id");
         }
         if (playersByTeam.values().stream().anyMatch(List::isEmpty)) {
             throw new IllegalArgumentException("every team must have at least one player");

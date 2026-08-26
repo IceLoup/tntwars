@@ -113,11 +113,13 @@ public final class ProvisioningService implements AutoCloseable {
                 .map(tournament -> tournament.name())
                 .orElse("Tournament");
         Map<UUID, List<UUID>> playersByTeam = new LinkedHashMap<>();
+        Map<UUID, String> teamNames = new LinkedHashMap<>();
         for (UUID teamId : match.teamIds()) {
             Team team = this.teamManager.getTeam(teamId).orElse(null);
             if (team == null) {
                 throw new ProvisionException("Team " + teamId + " no longer exists.");
             }
+            teamNames.put(teamId, team.name());
             playersByTeam.put(teamId, team.players().stream()
                     .map(player -> player.playerId())
                     .toList());
@@ -127,6 +129,7 @@ public final class ProvisioningService implements AutoCloseable {
                 result.serverId(),
                 tournamentName,
                 match.teamIds(),
+                teamNames,
                 playersByTeam,
                 this.config.tournament().playersPerTeam());
         this.redis.publish(MessageChannels.matchChannel(result.serverId()), this.codec.toJson(startMessage));

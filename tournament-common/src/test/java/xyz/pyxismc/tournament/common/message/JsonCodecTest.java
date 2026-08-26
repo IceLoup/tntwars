@@ -38,6 +38,7 @@ class JsonCodecTest {
         MatchStartMessage message = new MatchStartMessage(
                 UUID.randomUUID(), "game-1234abcd", "Summer Cup",
                 List.of(teamA, teamB),
+                Map.of(teamA, "Aqua", teamB, "Rose"),
                 Map.of(teamA, List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()),
                         teamB, List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())),
                 3);

@@ -80,7 +80,7 @@ transferred to match servers automatically.
 |------|---------|
 | `templates/proxy/plugins/tournament/config.yml` | Redis/PostgreSQL hostnames (compose service names), `server.docker.image: tournament-gameserver:latest`, `server.docker.enabled: true` |
 | `templates/proxy/velocity.toml` | Bind address (`0.0.0.0:2920`), `forwarding-secret`, static `lobby` server entry |
-| `templates/gameserver/plugins/tournament/config.yml` | Arena world, spawns, explosion, timeout |
+| `templates/gameserver/plugins/tournament/config.yml` | Arena world, team spawns (per-player coordinates), TNTWars kit, explosion, timeout, lobby return |
 | `templates/gameserver/config/paper-global.yml` | Velocity forwarding secret (must match `velocity.toml`) |
 | `templates/lobby/config/paper-global.yml` | Same forwarding secret for lobby |
 

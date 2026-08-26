@@ -1,5 +1,6 @@
 package xyz.pyxismc.tournament.paper;
 
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import xyz.pyxismc.tournament.common.message.JsonCodec;
@@ -24,6 +25,7 @@ public final class TournamentPaperPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
         String serverId = firstNonBlank(System.getenv("TOURNAMENT_SERVER_ID"),
                 getConfig().getString(SERVER_ID_KEY, "game"));
         String host = firstNonBlank(System.getenv("REDIS_HOST"), getConfig().getString("redis.host", "localhost"));
@@ -56,7 +58,7 @@ public final class TournamentPaperPlugin extends JavaPlugin {
     private void onMatchStart(String payload) {
         try {
             MatchStartMessage message = new JsonCodec().fromJson(payload, MatchStartMessage.class);
-            this.matchManager.startMatch(message);
+            Bukkit.getScheduler().runTask(this, () -> this.matchManager.startMatch(message));
         } catch (RuntimeException e) {
             getLogger().warning("Malformed match-start message ignored: " + e.getMessage());
         }
