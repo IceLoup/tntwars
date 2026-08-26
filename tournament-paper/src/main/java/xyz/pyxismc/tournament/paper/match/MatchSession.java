@@ -5,11 +5,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import xyz.pyxismc.tournament.common.model.PlayerMatchStats;
@@ -53,6 +55,7 @@ public final class MatchSession {
     private final Map<UUID, Stats> stats = new LinkedHashMap<>();
     private final Map<UUID, UUID> lastDamager = new HashMap<>();
     private final Map<UUID, Long> teamKills = new HashMap<>();
+    private final Set<UUID> eliminated = new HashSet<>();
 
     private UUID winnerTeamId;
 
@@ -104,6 +107,41 @@ public final class MatchSession {
 
     public boolean isMatchPlayer(UUID playerId) {
         return this.playerToTeam.containsKey(playerId);
+    }
+
+    /** Team ids in roster order. */
+    public List<UUID> teamIds() {
+        return this.teamOrder;
+    }
+
+    /** Total roster size of a team (alive or not). */
+    public int teamSize(UUID teamId) {
+        int size = 0;
+        for (UUID memberTeam : this.playerToTeam.values()) {
+            if (memberTeam.equals(teamId)) {
+                size++;
+            }
+        }
+        return size;
+    }
+
+    public int aliveCount(UUID teamId) {
+        return this.aliveByTeam.getOrDefault(teamId, 0);
+    }
+
+    public int rosterSize() {
+        return this.playerToTeam.size();
+    }
+
+    /** True once the player has died or quit during the match. */
+    public boolean isEliminated(UUID playerId) {
+        return this.eliminated.contains(playerId);
+    }
+
+    /** Kills credited to a player so far. */
+    public long killsOf(UUID playerId) {
+        Stats stats = this.stats.get(playerId);
+        return stats == null ? 0 : stats.kills;
     }
 
     /** True when exactly one team still has alive members. */
