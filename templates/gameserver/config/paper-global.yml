@@ -1,4 +1,4 @@
-opencop# Modern (Velocity) player info forwarding. The secret MUST match
+# Modern (Velocity) player info forwarding. The secret MUST match
 # forwarding-secret in the Velocity velocity.toml.
 proxies:
   velocity:

@@ -1,7 +1,7 @@
 # Tournament Lobby Server Template Image
 # Build: docker build -t tournament-lobby:latest templates/lobby
 # Run:   docker run -d --network tournament -p 25566:25565 tournament-lobby:latest
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 # Paper version matching the paper-api the plugin is compiled against.
 # Override with: docker build --build-arg PAPER_URL=... templates/lobby

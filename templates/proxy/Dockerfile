@@ -1,6 +1,7 @@
 # Tournament Proxy Template Image
 # Build: docker build -t tournament-proxy:latest templates/proxy
-# Run:   docker run -d -p 29020:29020 --network tournament tournament-proxy:latest
+# Run:   docker run -d -p 2920:2920 --network tournament \
+#          -v /var/run/docker.sock:/var/run/docker.sock tournament-proxy:latest
 FROM eclipse-temurin:21-jre
 
 # Velocity version matching the velocity-api the plugin is compiled against.
@@ -13,12 +14,12 @@ WORKDIR /velocity
 COPY velocity.toml velocity.toml
 COPY plugins/ plugins/
 
-# Download Velocity jar
+# Download Velocity jar and install Docker CLI for dynamic match server provisioning
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl docker.io \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL -o velocity.jar "${VELOCITY_URL}"
 
-EXPOSE 29020
+EXPOSE 2920
 
 ENTRYPOINT ["java", "-Xms512M", "-Xmx1G", "-jar", "velocity.jar"]

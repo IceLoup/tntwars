@@ -4,6 +4,8 @@ Runs the whole tournament platform: a Velocity proxy with the tournament
 plugin, PostgreSQL (persistence), Redis (Velocity ↔ Paper messaging), and a
 persistent Lobby server. Temporary match servers are started on demand by the
 plugin as containers from the `tournament-gameserver:latest` template image.
+The Velocity container uses the host Docker socket to create those match
+containers, so Docker Desktop / the Docker daemon must be running.
 
 ## Layout
 
@@ -40,7 +42,20 @@ tntwarsgame/
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-The proxy listens on **`localhost:29020`**. Create teams and start the tournament
+```powershell
+# Windows PowerShell with Docker + Maven + JDK/toolchain
+.\docker\build.ps1
+docker compose -f docker\docker-compose.yml up -d
+```
+
+The compose file also contains build contexts. To build every image through
+compose after the plugin jars have been staged, include the template profile:
+
+```powershell
+docker compose -f docker\docker-compose.yml --profile templates build
+```
+
+The proxy listens on **`localhost:2920`**. Create teams and start the tournament
 with `/team create <name>`, `/tournament start` (permissions `tournament.*`).
 Players connect to the lobby first; when the tournament starts they are
 transferred to match servers automatically.
@@ -64,7 +79,7 @@ transferred to match servers automatically.
 | File | Purpose |
 |------|---------|
 | `templates/proxy/plugins/tournament/config.yml` | Redis/PostgreSQL hostnames (compose service names), `server.docker.image: tournament-gameserver:latest`, `server.docker.enabled: true` |
-| `templates/proxy/velocity.toml` | Bind address (`0.0.0.0:29020`), `forwarding-secret`, static `lobby` server entry |
+| `templates/proxy/velocity.toml` | Bind address (`0.0.0.0:2920`), `forwarding-secret`, static `lobby` server entry |
 | `templates/gameserver/plugins/tournament/config.yml` | Arena world, spawns, explosion, timeout |
 | `templates/gameserver/config/paper-global.yml` | Velocity forwarding secret (must match `velocity.toml`) |
 | `templates/lobby/config/paper-global.yml` | Same forwarding secret for lobby |
