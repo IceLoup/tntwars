@@ -1,5 +1,6 @@
-# Tournament Velocity proxy (temporary match servers are registered at
-# runtime by the plugin, so no static [servers] entries are needed).
+# Tournament Velocity proxy. Match servers are registered at runtime by the
+# plugin, but the persistent lobby is required at startup so Velocity always
+# has at least one server registered.
 bind = "0.0.0.0:29020"
 motd = "Tournament Platform"
 show-max-players = 500
@@ -13,6 +14,10 @@ ping-passthrough = "DISABLED"
 enable-player-address-logging = true
 
 [servers]
+# Persistent lobby server (entry point for players)
+lobby = "lobby:25565"
+# Default/fallback servers tried on login or kick
+try = [ "lobby" ]
 
 [forced-hosts]
 

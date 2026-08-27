@@ -1,7 +1,7 @@
 # Tournament Proxy Template Image
-# Build: docker build -t tournament-proxy:latest templates/proxy
+# Build: docker build -t tournament-velocity:latest templates/proxy
 # Run:   docker run -d -p 2920:2920 --network tournament \
-#          -v /var/run/docker.sock:/var/run/docker.sock tournament-proxy:latest
+#          -v /var/run/docker.sock:/var/run/docker.sock tournament-velocity:latest
 FROM eclipse-temurin:21-jre
 
 # Velocity version matching the velocity-api the plugin is compiled against.

@@ -51,8 +51,8 @@ Copy-Item tournament-paper/target/tournament-paper-1.0.0-SNAPSHOT.jar templates/
 
 Write-Host "==> Building template images (tag: $fullTag)"
 
-Write-Host "  -> Building tournament-proxy..."
-docker build @cacheArgs -t "tournament-proxy:$fullTag" -t "tournament-proxy:latest" templates/proxy
+Write-Host "  -> Building tournament-velocity..."
+docker build @cacheArgs -t "tournament-velocity:$fullTag" -t "tournament-velocity:latest" templates/proxy
 
 Write-Host "  -> Building tournament-gameserver..."
 docker build @cacheArgs -t "tournament-gameserver:$fullTag" -t "tournament-gameserver:latest" templates/gameserver
@@ -62,8 +62,8 @@ docker build @cacheArgs -t "tournament-lobby:$fullTag" -t "tournament-lobby:late
 
 if ($Push) {
     Write-Host "==> Pushing images to registry"
-    docker push "tournament-proxy:$fullTag"
-    docker push "tournament-proxy:latest"
+    docker push "tournament-velocity:$fullTag"
+    docker push "tournament-velocity:latest"
     docker push "tournament-gameserver:$fullTag"
     docker push "tournament-gameserver:latest"
     docker push "tournament-lobby:$fullTag"
@@ -71,7 +71,7 @@ if ($Push) {
 }
 
 Write-Host "==> Done. Images built:"
-Write-Host "  tournament-proxy:$fullTag (also tagged as latest)"
+Write-Host "  tournament-velocity:$fullTag (also tagged as latest)"
 Write-Host "  tournament-gameserver:$fullTag (also tagged as latest)"
 Write-Host "  tournament-lobby:$fullTag (also tagged as latest)"
 Write-Host ""

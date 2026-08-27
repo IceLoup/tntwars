@@ -67,8 +67,8 @@ cp tournament-paper/target/tournament-paper-1.0.0-SNAPSHOT.jar templates/gameser
 
 echo "==> Building template images (tag: $FULL_TAG)"
 
-echo "  -> Building tournament-proxy..."
-docker build $NO_CACHE -t "tournament-proxy:${FULL_TAG}" -t "tournament-proxy:latest" templates/proxy
+echo "  -> Building tournament-velocity..."
+docker build $NO_CACHE -t "tournament-velocity:${FULL_TAG}" -t "tournament-velocity:latest" templates/proxy
 
 echo "  -> Building tournament-gameserver..."
 docker build $NO_CACHE -t "tournament-gameserver:${FULL_TAG}" -t "tournament-gameserver:latest" templates/gameserver
@@ -78,8 +78,8 @@ docker build $NO_CACHE -t "tournament-lobby:${FULL_TAG}" -t "tournament-lobby:la
 
 if [[ "$PUSH" == true ]]; then
     echo "==> Pushing images to registry"
-    docker push "tournament-proxy:${FULL_TAG}"
-    docker push "tournament-proxy:latest"
+    docker push "tournament-velocity:${FULL_TAG}"
+    docker push "tournament-velocity:latest"
     docker push "tournament-gameserver:${FULL_TAG}"
     docker push "tournament-gameserver:latest"
     docker push "tournament-lobby:${FULL_TAG}"
@@ -87,7 +87,7 @@ if [[ "$PUSH" == true ]]; then
 fi
 
 echo "==> Done. Images built:"
-echo "  tournament-proxy:${FULL_TAG} (also tagged as latest)"
+echo "  tournament-velocity:${FULL_TAG} (also tagged as latest)"
 echo "  tournament-gameserver:${FULL_TAG} (also tagged as latest)"
 echo "  tournament-lobby:${FULL_TAG} (also tagged as latest)"
 echo ""
