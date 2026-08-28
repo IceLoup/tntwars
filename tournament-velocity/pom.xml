@@ -18,8 +18,8 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Velocity 3.x s'appuie sur Adventure 4.x (Paper 26 utilise
-                 Adventure 5.x : le BOM reste ici, jamais dans le parent). -->
+            <!-- Velocity 3.x et Paper 1.21.11 s'appuient tous deux sur
+                 Adventure 4.x : le BOM reste ici, jamais dans le parent. -->
             <dependency>
                 <groupId>net.kyori</groupId>
                 <artifactId>adventure-bom</artifactId>

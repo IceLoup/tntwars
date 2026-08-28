@@ -1,8 +1,8 @@
 FROM eclipse-temurin:21-jre
 
-# Paper 26.2 build #112, matching the paper-api 26.2.build.112-stable the
+# Paper 1.21.11 build #132, matching the paper-api 1.21.11-R0.1-SNAPSHOT the
 # plugin is compiled against. Override with --build-arg PAPER_URL.
-ARG PAPER_URL=https://fill-data.papermc.io/v1/objects/bd3a58cf96874e5ea6643f5f6fe9b4f5bf9e34b795fa078c2f0ee8b98b2f907e/paper-26.2-112.jar
+ARG PAPER_URL=https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar
 
 WORKDIR /server
 

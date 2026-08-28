@@ -2,7 +2,7 @@
 # plugin, but the persistent lobby is required at startup so Velocity always
 # has at least one server registered.
 bind = "0.0.0.0:2920"
-motd = "Tournament Platform"
+motd = "                    <gradient:#8693AB:#BDD4E7><bold>ᴛɴᴛᴡᴀʀꜱ ᴛᴏᴜʀɴᴀᴍᴇɴᴛ<newline>                ꜰʀᴀɴᴄᴇʀᴀɴᴋᴇᴅ.ꜰʀ <reset>[<#BDD4E7>1.21.11+<reset>]"
 show-max-players = 500
 online-mode = true
 force-key-authentication = true

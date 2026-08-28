@@ -16,13 +16,8 @@
     <name>Tournament Paper</name>
     <description>Match execution on a Paper server</description>
 
-    <properties>
-        <!-- paper-api 26.2 est compilé en bytecode Java 25 : ce module doit être
-             compilé par le JDK 25 déclaré dans ~/.m2/toolchains.xml.
-             Override de java.version : le maven-compiler-plugin du parent
-             interpolera <release> avec la valeur de ce module. -->
-        <java.version>25</java.version>
-    </properties>
+    <!-- paper-api 1.21.11 cible Java 21, la même valeur que le parent :
+         aucune override de java.version ni toolchain dédiée ne sont nécessaires. -->
 
     <dependencies>
         <dependency>
@@ -44,27 +39,6 @@
 
     <build>
         <plugins>
-            <!-- Compile avec le JDK 25 (toolchain) requis par paper-api. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-toolchains-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>toolchain</goal>
-                        </goals>
-                        <phase>validate</phase>
-                        <configuration>
-                            <toolchains>
-                                <jdk>
-                                    <version>[25,26)</version>
-                                </jdk>
-                            </toolchains>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
             <!-- Emballe tournament-common dans le jar du plugin. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

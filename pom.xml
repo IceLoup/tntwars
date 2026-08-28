@@ -21,13 +21,13 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <!-- Java de la plateforme (common + velocity). Le module tournament-paper
-             cible Paper 26.2 qui exige Java 25 : il surcharge la propriete java.version
-             et compile via un JDK 25 declare dans ~/.m2/toolchains.xml. -->
+        <!-- Java de la plateforme. Le module tournament-paper cible Paper 1.21.11
+             qui exige Java 21, comme les autres modules : aucune surcharge de
+             java.version ni toolchain dediee. -->
         <java.version>21</java.version>
 
         <velocity-api.version>3.5.1</velocity-api.version>
-        <paper-api.version>26.2.build.112-stable</paper-api.version>
+        <paper-api.version>1.21.11-R0.1-SNAPSHOT</paper-api.version>
         <adventure.version>4.26.1</adventure.version>
         <junit.version>5.10.2</junit.version>
 

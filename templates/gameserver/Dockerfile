@@ -4,11 +4,12 @@
 #          -e TOURNAMENT_SERVER_ID=game-xxx \
 #          -e REDIS_HOST=redis -e REDIS_PORT=6379 -e REDIS_PASSWORD= \
 #          tournament-gameserver:latest
-FROM eclipse-temurin:25-jre
+FROM eclipse-temurin:21-jre
 
-# Paper version matching the paper-api the plugin is compiled against.
+# Paper 1.21.11 build #132, matching the paper-api 1.21.11-R0.1-SNAPSHOT the
+# plugin is compiled against.
 # Override with: docker build --build-arg PAPER_URL=... templates/gameserver
-ARG PAPER_URL=https://fill-data.papermc.io/v1/objects/bd3a58cf96874e5ea6643f5f6fe9b4f5bf9e34b795fa078c2f0ee8b98b2f907e/paper-26.2-112.jar
+ARG PAPER_URL=https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar
 
 WORKDIR /server
 
