@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 
 import org.slf4j.Logger;
@@ -89,24 +90,35 @@ public final class TournamentConfig {
         }
     }
 
+    /** Player names granted every tournament permission on the proxy. */
+    public record AdminSettings(List<String> names) {
+        public AdminSettings {
+            Objects.requireNonNull(names, "names");
+            names = List.copyOf(names);
+        }
+    }
+
     private final TournamentSettings tournament;
     private final ServerSettings server;
     private final RedisSettings redis;
     private final DatabaseSettings database;
     private final LobbySettings lobby;
+    private final AdminSettings admins;
 
     public TournamentConfig(
             TournamentSettings tournament,
             ServerSettings server,
             RedisSettings redis,
             DatabaseSettings database,
-            LobbySettings lobby
+            LobbySettings lobby,
+            AdminSettings admins
     ) {
         this.tournament = Objects.requireNonNull(tournament, "tournament");
         this.server = Objects.requireNonNull(server, "server");
         this.redis = Objects.requireNonNull(redis, "redis");
         this.database = Objects.requireNonNull(database, "database");
         this.lobby = Objects.requireNonNull(lobby, "lobby");
+        this.admins = Objects.requireNonNull(admins, "admins");
     }
 
     public TournamentSettings tournament() {
@@ -129,6 +141,10 @@ public final class TournamentConfig {
         return this.lobby;
     }
 
+    public AdminSettings admins() {
+        return this.admins;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -141,12 +157,13 @@ public final class TournamentConfig {
                 && this.server.equals(other.server)
                 && this.redis.equals(other.redis)
                 && this.database.equals(other.database)
-                && this.lobby.equals(other.lobby);
+                && this.lobby.equals(other.lobby)
+                && this.admins.equals(other.admins);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.tournament, this.server, this.redis, this.database, this.lobby);
+        return Objects.hash(this.tournament, this.server, this.redis, this.database, this.lobby, this.admins);
     }
 
     /** Defaults, matching the shipped {@code config.yml}. */
@@ -160,7 +177,8 @@ public final class TournamentConfig {
                         new DockerSettings(false, "tournament-gameserver", "tournament", 25565, "docker")),
                 new RedisSettings("localhost", 6379, ""),
                 new DatabaseSettings("localhost", 5432, "tournament", "tournament", ""),
-                new LobbySettings("lobby"));
+                new LobbySettings("lobby"),
+                new AdminSettings(List.of("IceLoup")));
     }
 
     /**
@@ -185,7 +203,7 @@ public final class TournamentConfig {
     }
 
     /** Builds a config from a parsed node, applying defaults for missing keys. */
-    public static TournamentConfig fromNode(ConfigurationNode node) {
+    public static TournamentConfig fromNode(ConfigurationNode node) throws IOException {
         TournamentConfig defaults = defaults();
 
         ConfigurationNode tournamentNode = node.node("tournament");
@@ -222,6 +240,8 @@ public final class TournamentConfig {
 
         String lobbyServer = node.node("lobby").node("server").getString(defaults.lobby().server());
 
+        List<String> admins = node.node("admins").getList(String.class, defaults.admins().names());
+
         return new TournamentConfig(
                 new TournamentSettings(maxTeamsPerMatch, playersPerTeam),
                 new ServerSettings(
@@ -231,7 +251,8 @@ public final class TournamentConfig {
                         new DockerSettings(dockerEnabled, dockerImage, dockerNetwork, dockerPort, dockerCommand)),
                 new RedisSettings(redisHost, redisPort, redisPassword),
                 new DatabaseSettings(dbHost, dbPort, dbName, dbUser, dbPassword),
-                new LobbySettings(lobbyServer));
+                new LobbySettings(lobbyServer),
+                new AdminSettings(admins));
     }
 
     private static void writeDefaultConfig(Path configFile) throws IOException {
@@ -258,6 +279,8 @@ public final class TournamentConfig {
                         database:              PostgreSQL connection (persistent data)
                         lobby:
                           server:              name of the lobby server registered in Velocity
+                        admins:
+                          - player name        granted every tournament permission (e.g. IceLoup)
                         """))
                 .build();
         ConfigurationNode node = loader.createNode();
@@ -281,6 +304,7 @@ public final class TournamentConfig {
         node.node("database", "username").set(defaults.database().username());
         node.node("database", "password").set(defaults.database().password());
         node.node("lobby", "server").set(defaults.lobby().server());
+        node.node("admins").set(defaults.admins().names());
         loader.save(node);
     }
 }

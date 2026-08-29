@@ -8,3 +8,6 @@ load: STARTUP
 
 authors: [ IceLoup ]
 website: https://pyxismc.xyz
+
+depend: []
+softdepend: [PlaceholderAPI]

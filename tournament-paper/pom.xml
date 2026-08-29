@@ -1,64 +1,130 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                          https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Parent -->
     <parent>
         <groupId>xyz.pyxismc</groupId>
         <artifactId>tournament</artifactId>
         <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>tournament-paper</artifactId>
     <packaging>jar</packaging>
 
     <name>Tournament Paper</name>
-    <description>Match execution on a Paper server</description>
-
-    <!-- paper-api 1.21.11 cible Java 21, la même valeur que le parent :
-         aucune override de java.version ni toolchain dédiée ne sont nécessaires. -->
+    <description>Paper plugin responsible for tournament match execution</description>
 
     <dependencies>
+
+        <!-- Paper API -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
         </dependency>
 
+        <!-- Shared tournament module -->
         <dependency>
             <groupId>xyz.pyxismc</groupId>
             <artifactId>tournament-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Adventure -->
+        <dependency>
+            <groupId>net.kyori</groupId>
+            <artifactId>adventure-api</artifactId>
+            <version>${adventure.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
+            <groupId>net.kyori</groupId>
+            <artifactId>adventure-text-minimessage</artifactId>
+            <version>${adventure.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- PlaceholderAPI -->
+        <dependency>
+            <groupId>me.clip</groupId>
+            <artifactId>placeholderapi</artifactId>
+            <version>${placeholderapi.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
+
     </dependencies>
 
+    <!-- PlaceholderAPI n'est pas publié sur papermc-repo ni sur Maven Central. -->
+    <repositories>
+        <repository>
+            <id>extendedclip-repo</id>
+            <url>https://repo.extendedclip.com/content/repositories/placeholderapi/</url>
+        </repository>
+    </repositories>
+
     <build>
+
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+
         <plugins>
-            <!-- Emballe tournament-common dans le jar du plugin. -->
+
+            <!-- Java compiler -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>${java.version}</release>
+                </configuration>
+            </plugin>
+
+            <!--
+                Shade tournament-common into the final plugin JAR.
+                Paper, Adventure and PlaceholderAPI remain provided by the server.
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
+
                 <executions>
                     <execution>
+                        <id>shade</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
+
                         <configuration>
+
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
+
                             <artifactSet>
-                                <excludes>
-                                    <!-- Fournis par Paper au runtime. -->
-                                    <exclude>net.kyori:*</exclude>
-                                    <exclude>org.jetbrains:annotations</exclude>
-                                    <exclude>org.slf4j:slf4j-api</exclude>
-                                </excludes>
+                                <includes>
+                                    <include>xyz.pyxismc:tournament-common</include>
+                                </includes>
                             </artifactSet>
+
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -69,16 +135,14 @@
                                     </excludes>
                                 </filter>
                             </filters>
+
                         </configuration>
                     </execution>
                 </executions>
+
             </plugin>
+
         </plugins>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
+
     </build>
 </project>

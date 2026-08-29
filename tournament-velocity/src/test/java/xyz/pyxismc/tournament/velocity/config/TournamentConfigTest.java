@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.spongepowered.configurate.ConfigurationNode;
@@ -42,6 +43,7 @@ class TournamentConfigTest {
         assertEquals("tournament", config.database().username());
         assertEquals("", config.database().password());
         assertEquals("lobby", config.lobby().server());
+        assertEquals(List.of("IceLoup"), config.admins().names());
     }
 
     @Test
@@ -72,6 +74,9 @@ class TournamentConfigTest {
                   password: "dbpass"
                 lobby:
                   server: hub
+                admins:
+                  - AdminNick
+                  - IceLoup
                 """);
 
         TournamentConfig config = TournamentConfig.fromNode(node);
@@ -95,6 +100,7 @@ class TournamentConfigTest {
         assertEquals("admin", config.database().username());
         assertEquals("dbpass", config.database().password());
         assertEquals("hub", config.lobby().server());
+        assertEquals(List.of("AdminNick", "IceLoup"), config.admins().names());
     }
 
     @Test

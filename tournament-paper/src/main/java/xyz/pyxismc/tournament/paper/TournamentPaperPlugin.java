@@ -9,6 +9,7 @@ import xyz.pyxismc.tournament.common.message.MessageChannels;
 import xyz.pyxismc.tournament.common.redis.JedisTournamentRedis;
 import xyz.pyxismc.tournament.common.redis.TournamentRedis;
 import xyz.pyxismc.tournament.paper.match.MatchManager;
+import xyz.pyxismc.tournament.paper.placeholder.TournamentPlaceholderExpansion;
 
 /**
  * Match execution plugin. Connects to Redis, subscribes to its own match
@@ -41,6 +42,13 @@ public final class TournamentPaperPlugin extends JavaPlugin {
                     + ", waiting for match instructions on '" + serverId + "'");
         } catch (Exception e) {
             getLogger().warning("Redis unavailable, match execution disabled: " + e.getMessage());
+        }
+
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new TournamentPlaceholderExpansion().register();
+            getLogger().info("PlaceholderAPI expansion registered (placeholders: %tournament_server_name%, %tournament_tournament_name%, %tournament_online_players%)");
+        } else {
+            getLogger().warning("PlaceholderAPI not found, placeholders will not be available globally");
         }
     }
 

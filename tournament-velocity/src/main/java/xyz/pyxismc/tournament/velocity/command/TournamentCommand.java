@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
+import com.velocitypowered.api.proxy.Player;
 
 import xyz.pyxismc.tournament.common.dto.TournamentSnapshot;
 import xyz.pyxismc.tournament.common.dto.TournamentSummary;
@@ -252,8 +253,15 @@ public final class TournamentCommand implements SimpleCommand {
         return List.of();
     }
 
-    private static boolean hasPermission(CommandSource source, String permission) {
-        return source.hasPermission(permission) || source.hasPermission("tournament.admin");
+    private boolean hasPermission(CommandSource source, String permission) {
+        return source.hasPermission(permission)
+                || source.hasPermission("tournament.admin")
+                || isConfiguredAdmin(source);
+    }
+
+    private boolean isConfiguredAdmin(CommandSource source) {
+        return source instanceof Player player
+                && this.config.admins().names().contains(player.getUsername());
     }
 
     private static void deny(CommandSource source) {

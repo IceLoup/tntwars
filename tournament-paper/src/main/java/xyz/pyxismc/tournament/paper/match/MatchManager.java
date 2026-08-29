@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -57,6 +59,7 @@ import xyz.pyxismc.tournament.common.message.MatchStartMessage;
 import xyz.pyxismc.tournament.common.message.MessageChannels;
 import xyz.pyxismc.tournament.common.redis.TournamentRedis;
 import xyz.pyxismc.tournament.common.result.MatchResult;
+import xyz.pyxismc.tournament.paper.message.MiniMessageUtil;
 
 public final class MatchManager implements Listener {
 
@@ -73,9 +76,9 @@ public final class MatchManager implements Listener {
     private static final String BUNGEE_CHANNEL = "BungeeCord";
 
     private static final List<TeamColor> DEFAULT_COLORS = List.of(
-            new TeamColor("aqua", "Aqua", ChatColor.AQUA),
-            new TeamColor("rose_pastel", "Rose Pastel", ChatColor.LIGHT_PURPLE),
-            new TeamColor("lime", "Lime", ChatColor.GREEN));
+            new TeamColor("aqua", "Aqua", "#8693AB"),
+            new TeamColor("rose_pastel", "Rose Pastel", "#BDD4E7"),
+            new TeamColor("lime", "Lime", "#55FF55"));
 
     private final JavaPlugin plugin;
     private final TournamentRedis redis;
@@ -114,6 +117,9 @@ public final class MatchManager implements Listener {
         this.session = newSession;
         this.tournamentName = message.tournamentName();
 
+        MiniMessageUtil.setServerName(message.serverId());
+        MiniMessageUtil.setTournamentName(message.tournamentName());
+
         World world = resolveWorld();
         applyArenaRules(world);
         List<ConfiguredTeam> configuredTeams = resolveTeamSlots(world);
@@ -136,8 +142,9 @@ public final class MatchManager implements Listener {
                 player.teleport(spawn);
                 giveKit(player);
                 player.setScoreboard(this.scoreboard);
-                player.sendMessage(configuredTeam.color() + "Match " + message.tournamentName()
-                        + " started. Last team standing wins!");
+                MiniMessageUtil.send(player,
+                        "<" + configuredTeam.color() + ">Match " + message.tournamentName()
+                                + " started. Last team standing wins!");
             }
         }
 
@@ -157,6 +164,8 @@ public final class MatchManager implements Listener {
         }
         this.session = null;
         cancelTasks();
+        MiniMessageUtil.setServerName("Unknown");
+        MiniMessageUtil.setTournamentName("Tournament");
         this.plugin.getLogger().info("Match session cancelled");
     }
 
@@ -196,7 +205,7 @@ public final class MatchManager implements Listener {
         UUID killerId = victim.getKiller() == null ? null : victim.getKiller().getUniqueId();
         this.session.onPlayerDeath(victim.getUniqueId(), killerId);
         Bukkit.getScheduler().runTask(this.plugin, () -> victim.setGameMode(GameMode.SPECTATOR));
-        victim.sendMessage(ChatColor.RED + "You are out of the match.");
+        victim.sendMessage(MiniMessageUtil.error("You are out of the match."));
         updateScoreboard();
         if (this.session.isOver()) {
             endMatch();
@@ -321,8 +330,11 @@ public final class MatchManager implements Listener {
                 new MatchResultMessage(finished.matchId(), finished.serverId(), result)));
         String winner = winnerName(finished);
         this.plugin.getLogger().info("Match " + finished.matchId() + " finished, winner " + winner);
-        Bukkit.broadcastMessage(ChatColor.GOLD + "Match finished. Winner team: " + winner);
+        Bukkit.broadcast(MiniMessageUtil.deserialize(
+                MiniMessageUtil.primary("Match finished. Winner team: ") + winner));
         updateFinishedScoreboard(finished, winner);
+        MiniMessageUtil.setServerName("Unknown");
+        MiniMessageUtil.setTournamentName("Tournament");
         scheduleLobbyReturnAndShutdown();
     }
 
@@ -443,7 +455,8 @@ public final class MatchManager implements Listener {
 
     private void setupScoreboard(MatchStartMessage message, List<ConfiguredTeam> configuredTeams) {
         this.scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-        Objective objective = this.scoreboard.registerNewObjective("tntwars", "dummy", ChatColor.GOLD + "TNTWars");
+        Objective objective = this.scoreboard.registerNewObjective("tntwars", "dummy",
+                Component.text("TNTWars").color(NamedTextColor.GOLD));
         objective.setDisplaySlot(DisplaySlot.SIDEBAR);
 
         Map<UUID, RuntimeTeam> teams = new LinkedHashMap<>();
@@ -452,8 +465,8 @@ public final class MatchManager implements Listener {
             ConfiguredTeam configuredTeam = configuredTeams.get(Math.min(index, configuredTeams.size() - 1));
             String teamName = message.teamNames().getOrDefault(teamId, configuredTeam.displayName());
             Team scoreboardTeam = this.scoreboard.registerNewTeam("tw" + index);
-            scoreboardTeam.setColor(configuredTeam.color());
-            scoreboardTeam.setPrefix(configuredTeam.color() + "[" + teamName + "] " + ChatColor.RESET);
+            scoreboardTeam.setColor(toChatColor(configuredTeam.color()));
+            scoreboardTeam.setPrefix(toChatColor(configuredTeam.color()) + "[" + teamName + "] " + ChatColor.RESET);
             for (UUID playerId : message.playersByTeam().getOrDefault(teamId, List.of())) {
                 Player player = Bukkit.getPlayer(playerId);
                 if (player != null) {
@@ -463,6 +476,15 @@ public final class MatchManager implements Listener {
             teams.put(teamId, new RuntimeTeam(teamName, configuredTeam, scoreboardTeam));
         }
         this.runtimeTeams = teams;
+    }
+
+    private static ChatColor toChatColor(String hexColor) {
+        return switch (hexColor.toLowerCase()) {
+            case "#8693ab" -> ChatColor.AQUA;
+            case "#bdd4e7" -> ChatColor.LIGHT_PURPLE;
+            case "#55ff55" -> ChatColor.GREEN;
+            default -> ChatColor.WHITE;
+        };
     }
 
     private void updateScoreboard() {
@@ -481,7 +503,7 @@ public final class MatchManager implements Listener {
         addLine(objective, ChatColor.DARK_GRAY + " ", score--);
         for (UUID teamId : current.teamIds()) {
             RuntimeTeam team = this.runtimeTeams.get(teamId);
-            ChatColor color = team == null ? ChatColor.WHITE : team.configuredTeam().color();
+            ChatColor color = team == null ? ChatColor.WHITE : toChatColor(team.configuredTeam().color());
             String name = team == null ? teamId.toString().substring(0, 8) : team.name();
             addLine(objective, color + name + ChatColor.WHITE + " "
                     + current.aliveCount(teamId) + "/3 "
@@ -504,7 +526,7 @@ public final class MatchManager implements Listener {
         addLine(objective, ChatColor.DARK_GRAY + " ", score--);
         for (UUID teamId : finished.teamIds()) {
             RuntimeTeam team = this.runtimeTeams.get(teamId);
-            ChatColor color = team == null ? ChatColor.WHITE : team.configuredTeam().color();
+            ChatColor color = team == null ? ChatColor.WHITE : toChatColor(team.configuredTeam().color());
             String name = team == null ? teamId.toString().substring(0, 8) : team.name();
             addLine(objective, color + name + ChatColor.WHITE + " K:" + finished.kills(teamId), score--);
         }
@@ -530,7 +552,11 @@ public final class MatchManager implements Listener {
         return finished.winnerTeamId()
                 .map(teamId -> {
                     RuntimeTeam team = this.runtimeTeams.get(teamId);
-                    return team == null ? teamId.toString() : team.configuredTeam().color() + team.name();
+                    if (team == null) {
+                        return teamId.toString();
+                    }
+                    String color = team.configuredTeam().color();
+                    return "<" + color + ">" + team.name() + "</" + color + ">";
                 })
                 .orElse("none");
     }
@@ -662,13 +688,13 @@ public final class MatchManager implements Listener {
         return DEFAULT_COLORS.getFirst();
     }
 
-    private record ConfiguredTeam(String key, String displayName, ChatColor color, List<Location> spawns) {
+    private record ConfiguredTeam(String key, String displayName, String color, List<Location> spawns) {
     }
 
     private record RuntimeTeam(String name, ConfiguredTeam configuredTeam, Team scoreboardTeam) {
     }
 
-    private record TeamColor(String key, String displayName, ChatColor chatColor) {
+    private record TeamColor(String key, String displayName, String chatColor) {
     }
 
     private record TntBlockKey(UUID worldId, int x, int y, int z) {

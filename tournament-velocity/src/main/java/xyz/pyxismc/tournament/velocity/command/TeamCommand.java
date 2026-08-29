@@ -16,8 +16,8 @@ import xyz.pyxismc.tournament.velocity.team.TeamManager;
 
 /**
  * {@code /team} command: create, invite, accept, leave, disband and info.
- * Player actions; every subcommand has its own {@code tournament.team.*}
- * permission and is only usable while no tournament locks teams.
+ * Open to every player; team rules (captain-only invite/disband, locked
+ * teams during a tournament) are enforced by the {@link TeamManager}.
  */
 public final class TeamCommand implements SimpleCommand {
 
@@ -55,10 +55,6 @@ public final class TeamCommand implements SimpleCommand {
     }
 
     private void create(Player player, String[] args) {
-        if (!hasPermission(player, "tournament.team.create")) {
-            deny(player);
-            return;
-        }
         if (args.length < 2 || args[1].isBlank()) {
             CommandMessages.error(player, "Usage: /team create <name>");
             return;
@@ -72,10 +68,6 @@ public final class TeamCommand implements SimpleCommand {
     }
 
     private void invite(Player player, String[] args) {
-        if (!hasPermission(player, "tournament.team.invite")) {
-            deny(player);
-            return;
-        }
         if (args.length < 2) {
             CommandMessages.error(player, "Usage: /team invite <player>");
             return;
@@ -94,10 +86,6 @@ public final class TeamCommand implements SimpleCommand {
     }
 
     private void accept(Player player) {
-        if (!hasPermission(player, "tournament.team.accept")) {
-            deny(player);
-            return;
-        }
         Optional<UUID> teamId = this.teamManager.pendingInvitationOf(player.getUniqueId());
         if (teamId.isEmpty()) {
             CommandMessages.error(player, "You have no pending invitation.");
@@ -112,10 +100,6 @@ public final class TeamCommand implements SimpleCommand {
     }
 
     private void leave(Player player) {
-        if (!hasPermission(player, "tournament.team.leave")) {
-            deny(player);
-            return;
-        }
         try {
             this.teamManager.leaveTeam(asCommonPlayer(player));
             CommandMessages.success(player, "You left your team.");
@@ -125,10 +109,6 @@ public final class TeamCommand implements SimpleCommand {
     }
 
     private void disband(Player player) {
-        if (!hasPermission(player, "tournament.team.disband")) {
-            deny(player);
-            return;
-        }
         String name = this.teamManager.teamOfPlayer(player.getUniqueId()).map(Team::name).orElse("");
         try {
             this.teamManager.disbandTeam(asCommonPlayer(player));
@@ -139,10 +119,6 @@ public final class TeamCommand implements SimpleCommand {
     }
 
     private void info(Player player, String[] args) {
-        if (!hasPermission(player, "tournament.team.info")) {
-            deny(player);
-            return;
-        }
         Optional<Team> team;
         if (args.length >= 2) {
             Optional<Player> target = this.proxy.getPlayer(args[1]);
@@ -178,14 +154,6 @@ public final class TeamCommand implements SimpleCommand {
                     .toList();
         }
         return List.of();
-    }
-
-    private static boolean hasPermission(CommandSource source, String permission) {
-        return source.hasPermission(permission) || source.hasPermission("tournament.admin");
-    }
-
-    private static void deny(CommandSource source) {
-        CommandMessages.error(source, "You do not have permission to do this.");
     }
 
     private static String joinName(String[] args) {

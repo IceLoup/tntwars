@@ -30,3 +30,7 @@ database:
 
 lobby:
   server: lobby
+
+# Players granted every tournament permission on the proxy (default admins).
+admins:
+  - IceLoup

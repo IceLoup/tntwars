@@ -8,6 +8,7 @@ WORKDIR /server
 
 COPY server.properties server.properties
 COPY eula.txt eula.txt
+COPY ops.json ops.json
 COPY config/ config/
 COPY plugins/ plugins/
 
