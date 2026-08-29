@@ -8,8 +8,8 @@ public final class CommandMessages {
     private CommandMessages() {
     }
 
-    private static final String PRIMARY = "#8693AB";
-    private static final String SECONDARY = "#BDD4E7";
+    private static final String PRIMARY = "#55FFFF";
+    private static final String SECONDARY = "#FF55FF";
     private static final String ERROR = "#FF5555";
     private static final String SUCCESS = "#55FF55";
     private static final String WARNING = "#FFAA00";

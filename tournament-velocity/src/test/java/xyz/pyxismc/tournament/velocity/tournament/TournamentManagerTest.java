@@ -250,6 +250,63 @@ class TournamentManagerTest {
     }
 
     @Test
+    void forceStartCreatesTournamentWhenNoneActive() {
+        fullTeam("Alpha", "a1", "a2", "a3");
+        fullTeam("Beta", "b1", "b2", "b3");
+
+        Tournament started = this.manager.forceStartTournament("TNTWars");
+
+        assertEquals(TournamentState.STARTING, started.state());
+        assertEquals("TNTWars", started.name());
+        assertEquals(2, started.teamIds().size());
+        assertTrue(this.teamManager.getTeams().stream().allMatch(Team::locked));
+        assertEquals(1, this.eventBus.count(TournamentStartedEvent.class));
+    }
+
+    @Test
+    void forceStartReusesRegistrationTournament() {
+        fullTeam("Alpha", "a1", "a2", "a3");
+        fullTeam("Beta", "b1", "b2", "b3");
+        this.manager.createTournament("Summer Cup");
+
+        Tournament started = this.manager.forceStartTournament("TNTWars");
+
+        assertEquals("Summer Cup", started.name());
+        assertEquals(1, this.manager.getTournaments().size());
+    }
+
+    @Test
+    void forceStartSkipsTeamValidation() {
+        fullTeam("Alpha", "a1", "a2", "a3");
+        Player captain = player("b");
+        this.teamManager.createTeam(captain, "Incomplete");
+
+        Tournament started = this.manager.forceStartTournament("TNTWars");
+
+        assertEquals(TournamentState.STARTING, started.state());
+        assertEquals(2, started.teamIds().size());
+    }
+
+    @Test
+    void forceStartRequiresAtLeastTwoTeams() {
+        this.teamManager.createTeam(player("A"), "Solo Team");
+
+        TournamentException e = assertThrows(TournamentException.class,
+                () -> this.manager.forceStartTournament("TNTWars"));
+        assertTrue(e.getMessage().contains("at least 2 teams"));
+    }
+
+    @Test
+    void forceStartRejectedWhileRunning() {
+        registerThreeFullTeams();
+        this.manager.createTournament("Summer Cup");
+        this.manager.startTournament();
+        this.manager.startNextRound();
+
+        assertThrows(TournamentException.class, () -> this.manager.forceStartTournament("TNTWars"));
+    }
+
+    @Test
     void pauseIsRejectedDuringRegistration() {
         this.manager.createTournament("Summer Cup");
         assertThrows(TournamentException.class, () -> this.manager.pauseTournament());

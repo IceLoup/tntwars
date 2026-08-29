@@ -134,6 +134,47 @@ public final class TournamentManager {
     }
 
     /**
+     * Force-starts the tournament: reuses the active tournament when it is in
+     * REGISTRATION, otherwise creates a new one with the given name. Team and
+     * completeness validations are skipped (only a minimum of 2 teams is
+     * enforced, because a round cannot be built with fewer). Teams are locked,
+     * round 1 is built, and the tournament moves REGISTRATION -> STARTING.
+     */
+    public synchronized Tournament forceStartTournament(String name) {
+        Optional<Tournament> active = getActiveTournament();
+        Tournament tournament;
+        if (active.isPresent() && !this.stateMachine.isTerminal(active.get().state())) {
+            tournament = active.get();
+            if (tournament.state() != TournamentState.REGISTRATION) {
+                throw new TournamentException("Tournament is in state " + tournament.state()
+                        + " and cannot be force-started.");
+            }
+        } else {
+            tournament = createTournament(name);
+        }
+
+        List<Team> teams = this.teamManager.getTeams();
+        if (teams.size() < 2) {
+            throw new TournamentException("Cannot start the tournament: at least 2 teams are required.");
+        }
+
+        TournamentState next = this.transition(tournament, TournamentState.STARTING);
+        Tournament started = tournament
+                .withState(next)
+                .withStartedAt(Instant.now())
+                .withTeamIds(teams.stream().map(Team::id).toList());
+        this.tournaments.put(started.id(), started);
+
+        Round firstRound = this.roundManager.createFirstRound(started.id(), teams);
+        started = started.withRoundIds(Stream.concat(started.roundIds().stream(), Stream.of(firstRound.id())).toList());
+        this.tournaments.put(started.id(), started);
+
+        this.teamManager.lockAllTeams();
+        this.eventBus.fire(new TournamentStartedEvent(started));
+        return started;
+    }
+
+    /**
      * Starts the current round (STARTING -> ROUND_RUNNING, or
      * ROUND_FINISHED -> ROUND_RUNNING after a round completed).
      */

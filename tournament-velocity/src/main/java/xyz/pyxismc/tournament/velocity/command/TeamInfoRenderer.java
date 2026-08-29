@@ -9,10 +9,10 @@ import xyz.pyxismc.tournament.common.model.TeamPlayer;
 /** Renders a team as MiniMessage markup for the {@code /team info} command. */
 public final class TeamInfoRenderer {
 
-    private static final String PRIMARY = "#8693AB";
-    private static final String SECONDARY = "#BDD4E7";
+    private static final String PRIMARY = "#55FFFF";
+    private static final String SECONDARY = "#FF55FF";
     private static final String MUTED = "#888888";
-    private static final String ACCENT = "#FFAA00";
+    private static final String ACCENT = "#55FF55";
 
     private TeamInfoRenderer() {
     }

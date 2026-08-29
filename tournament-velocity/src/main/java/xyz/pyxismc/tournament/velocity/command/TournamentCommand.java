@@ -56,6 +56,7 @@ public final class TournamentCommand implements SimpleCommand {
     public void execute(Invocation invocation) {
         CommandSource source = invocation.source();
         String[] args = invocation.arguments();
+        boolean forceStart = "tntwar".equalsIgnoreCase(invocation.alias());
 
         if (args.length == 0) {
             CommandMessages.info(source, "/tournament <start|stop|pause|resume|info|debug|history>");
@@ -63,7 +64,7 @@ public final class TournamentCommand implements SimpleCommand {
         }
 
         switch (args[0].toLowerCase()) {
-            case "start" -> start(source);
+            case "start" -> start(source, forceStart);
             case "stop" -> stop(source);
             case "pause" -> pause(source);
             case "resume" -> resume(source);
@@ -74,18 +75,21 @@ public final class TournamentCommand implements SimpleCommand {
         }
     }
 
-    private void start(CommandSource source) {
+    private void start(CommandSource source, boolean forceStart) {
         if (!hasPermission(source, "tournament.start")) {
             deny(source);
             return;
         }
         try {
-            Tournament tournament = this.tournamentManager.startTournament();
+            Tournament tournament = forceStart
+                    ? this.tournamentManager.forceStartTournament("TNTWars")
+                    : this.tournamentManager.startTournament();
             this.tournamentManager.startNextRound();
             Round round = this.roundManager.getCurrentRound().orElseThrow();
             CommandMessages.success(source, "Tournament '" + tournament.name() + "' started ("
                     + this.teamManager.getTeams().size() + " teams, round " + round.number()
-                    + " with " + this.roundManager.getMatchesOfRound(round.id()).size() + " match(es)).");
+                    + " with " + this.roundManager.getMatchesOfRound(round.id()).size() + " match(es))."
+                    + (forceStart ? " (forced)" : ""));
         } catch (TournamentException e) {
             CommandMessages.error(source, e.getMessage());
         }

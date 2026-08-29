@@ -13,8 +13,8 @@ public final class MiniMessageUtil {
 
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
 
-    public static final String PRIMARY = "#8693AB";
-    public static final String SECONDARY = "#BDD4E7";
+    public static final String PRIMARY = "#55FFFF";
+    public static final String SECONDARY = "#FF55FF";
     public static final String ERROR = "#FF5555";
     public static final String SUCCESS = "#55FF55";
     public static final String WARNING = "#FFAA00";

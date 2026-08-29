@@ -76,8 +76,8 @@ public final class MatchManager implements Listener {
     private static final String BUNGEE_CHANNEL = "BungeeCord";
 
     private static final List<TeamColor> DEFAULT_COLORS = List.of(
-            new TeamColor("aqua", "Aqua", "#8693AB"),
-            new TeamColor("rose_pastel", "Rose Pastel", "#BDD4E7"),
+            new TeamColor("aqua", "Aqua", "#55FFFF"),
+            new TeamColor("rose_pastel", "Rose Pastel", "#FF55FF"),
             new TeamColor("lime", "Lime", "#55FF55"));
 
     private final JavaPlugin plugin;
@@ -480,8 +480,8 @@ public final class MatchManager implements Listener {
 
     private static ChatColor toChatColor(String hexColor) {
         return switch (hexColor.toLowerCase()) {
-            case "#8693ab" -> ChatColor.AQUA;
-            case "#bdd4e7" -> ChatColor.LIGHT_PURPLE;
+            case "#55ffff" -> ChatColor.AQUA;
+            case "#ff55ff" -> ChatColor.LIGHT_PURPLE;
             case "#55ff55" -> ChatColor.GREEN;
             default -> ChatColor.WHITE;
         };
