@@ -152,7 +152,7 @@ commandManager.register(commandManager.metaBuilder("team")
         commandManager.register(commandManager.metaBuilder("rejoin")
                 .plugin(this)
                 .build(),
-                new RejoinCommand(this.tournamentManager, this.teamManager, this.roundManager, this.eventBus, this.config));
+                new RejoinCommand(this.tournamentManager, this.teamManager, this.roundManager, this.eventBus, this.config, this.proxy));
     }
 
     @Subscribe

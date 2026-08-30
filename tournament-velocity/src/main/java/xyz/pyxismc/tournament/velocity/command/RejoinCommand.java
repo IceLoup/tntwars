@@ -53,8 +53,8 @@ public final class RejoinCommand implements SimpleCommand {
             return;
         }
 
-        Player player = (Player) source;
-        UUID playerId = player.playerId();
+Player player = (Player) source;
+         UUID playerId = player.getUniqueId();
 
         // Find the player's current team
         Optional<xyz.pyxismc.tournament.common.model.Team> teamOpt = teamManager.teamOfPlayer(playerId);
