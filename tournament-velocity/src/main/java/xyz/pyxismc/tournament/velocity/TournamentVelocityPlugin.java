@@ -1,7 +1,11 @@
 package xyz.pyxismc.tournament.velocity;
 
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandManager;
@@ -16,6 +20,7 @@ import com.velocitypowered.api.proxy.server.ServerInfo;
 import com.zaxxer.hikari.HikariDataSource;
 
 import org.slf4j.Logger;
+import net.kyori.adventure.text.Component;
 
 import xyz.pyxismc.tournament.common.message.JsonCodec;
 import xyz.pyxismc.tournament.common.message.MatchReadyMessage;
@@ -85,14 +90,15 @@ public final class TournamentVelocityPlugin {
     private RoundManager roundManager;
     private TournamentManager tournamentManager;
 
-    private HikariDataSource dataSource;
-    private TournamentRepository repository;
-    private TournamentSnapshotBuilder snapshotBuilder;
+private HikariDataSource dataSource;
+     private TournamentRepository repository;
+     private TournamentSnapshotBuilder snapshotBuilder;
+     private final Map<UUID, Set<UUID>> queuedPlayersPerMatch = new ConcurrentHashMap<>();
 
-    private TournamentRedis redis;
-    private ProvisioningService provisioningService;
-    private MatchServerLifecycle matchServerLifecycle;
-    private JsonCodec jsonCodec = new JsonCodec();
+     private TournamentRedis redis;
+     private ProvisioningService provisioningService;
+     private MatchServerLifecycle matchServerLifecycle;
+     private JsonCodec jsonCodec = new JsonCodec();
 
     @Inject
     public TournamentVelocityPlugin(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -220,8 +226,9 @@ commandManager.register(commandManager.metaBuilder("team")
                     this.config,
                     this.logger);
             this.provisioningService.start();
-            this.redis.subscribe(MessageChannels.MATCH_READY, this::onMatchReady);
-            this.redis.subscribe(MessageChannels.MATCH_RESULT, this::onMatchResult);
+this.redis.subscribe(MessageChannels.MATCH_READY, this::onMatchReady);
+             this.redis.subscribe(MessageChannels.MATCH_RESULT, this::onMatchResult);
+             this.redis.subscribe(MessageChannels.MATCH_READY_FOR_PLAYERS, this::onMatchReadyForPlayers);
             this.logger.info("Redis connected: {}:{}", redisSettings.host(), redisSettings.port());
         } catch (Exception e) {
             this.logger.warn("Redis unavailable, match provisioning disabled: {}", e.getMessage());
@@ -242,10 +249,28 @@ commandManager.register(commandManager.metaBuilder("team")
         try {
             MatchReadyMessage message = this.jsonCodec.fromJson(payload, MatchReadyMessage.class);
             this.logger.info("Match {} ready on server {}", message.matchId(), message.serverId());
-            this.proxy.getServer(message.serverId()).ifPresentOrElse(
-                    server -> transferTeamPlayers(message.matchId(), server),
-                    () -> this.logger.warn("Match server {} is not registered in Velocity, players not transferred",
-                            message.serverId()));
+            Match match = this.roundManager.getMatch(message.matchId()).orElse(null);
+            if (match == null) {
+                this.logger.warn("Match {} not found in round manager", message.matchId());
+                return;
+            }
+            Set<UUID> playerIds = new HashSet<>();
+            for (UUID teamId : match.teamIds()) {
+                Team team = this.teamManager.getTeam(teamId).orElse(null);
+                if (team != null) {
+                    for (TeamPlayer tp : team.players()) {
+                        playerIds.add(tp.playerId());
+                    }
+                }
+            }
+            Set<UUID> queued = this.queuedPlayersPerMatch.computeIfAbsent(message.matchId(), k -> ConcurrentHashMap.newKeySet());
+            for (UUID playerId : playerIds) {
+                this.proxy.getPlayer(playerId).ifPresent(player -> {
+                    queued.add(playerId);
+                    // Send action bar message
+                    player.sendActionBar(Component.text("Vous êtes en file d'attente pour rejoindre le serveur de jeu..."));
+                });
+            }
         } catch (RuntimeException e) {
             this.logger.warn("Malformed match-ready message ignored: {}", e.getMessage());
         }
@@ -337,8 +362,43 @@ commandManager.register(commandManager.metaBuilder("team")
                 this.logger.warn("Failed to persist tournament {}: {}", tournament.id(), e.getMessage());
             }
         }).schedule();
+}
+    
+    private void onMatchReadyForPlayers(String payload) {
+        try {
+            UUID matchId = UUID.fromString(payload);
+            this.logger.info("Received match ready for players signal for match {}", matchId);
+            Set<UUID> queued = this.queuedPlayersPerMatch.remove(matchId);
+            if (queued == null || queued.isEmpty()) {
+                this.logger.debug("No players queued for match {}", matchId);
+                return;
+            }
+            Match match = this.roundManager.getMatch(matchId).orElse(null);
+            if (match == null) {
+                this.logger.warn("Match {} not found for player transfer", matchId);
+                return;
+            }
+            this.logger.info("Transferring {} queued players for match {}", queued.size(), matchId);
+            for (UUID playerId : queued) {
+                this.proxy.getPlayer(playerId).ifPresent(player -> {
+                    // Send action bar message
+                    player.sendActionBar(Component.text("Transfert vers le serveur de jeu en cours..."));
+                    // Transfer player
+                    RegisteredServer server = this.proxy.getServer(match.serverId()).orElse(null);
+                    if (server != null) {
+                        player.createConnectionRequest(server).connect();
+                    } else {
+                        this.logger.warn("Server {} not found for player {} transfer", match.serverId(), playerId);
+                    }
+                });
+            }
+        } catch (IllegalArgumentException e) {
+            this.logger.warn("Invalid match ID received in MATCH_READY_FOR_PLAYERS: {}", payload);
+        } catch (Exception e) {
+            this.logger.warn("Error processing MATCH_READY_FOR_PLAYERS: {}", e.getMessage());
+        }
     }
-
+    
     /** Adapts the Velocity proxy to the {@link ServerRegistry} interface. */
     private static final class ProxyServerRegistry implements ServerRegistry {
 

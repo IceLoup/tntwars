@@ -46,6 +46,8 @@ public final class TournamentPaperPlugin extends JavaPlugin {
             this.matchWorker.start();
             getLogger().info("Connected to Redis at " + host + ":" + port
                     + ", waiting for match instructions on '" + serverId + "'");
+            // Signal that this server is ready to receive players
+            this.redis.publish(MessageChannels.MATCH_READY_FOR_PLAYERS, serverId);
         } catch (Exception e) {
             getLogger().warning("Redis unavailable, match execution disabled: " + e.getMessage());
         }
