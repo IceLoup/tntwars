@@ -25,8 +25,8 @@ import xyz.pyxismc.tournament.velocity.tournament.TournamentManager;
 
 /**
  * Consumes {@link MatchStartedEvent}s, pushes a {@link ProvisionRequest} on
- * the Redis queue and, once a provisioner reports the server ready, publishes
- * the {@link MatchStartMessage} on the server's channel and fires a
+ * the Redis queue and, once a provisioner reports the server ready, pushes
+ * the {@link MatchStartMessage} on the server's instruction queue and fires a
  * {@link MatchProvisionedEvent}.
  */
 public final class ProvisioningService implements AutoCloseable {
@@ -132,7 +132,7 @@ public final class ProvisioningService implements AutoCloseable {
                 teamNames,
                 playersByTeam,
                 this.config.tournament().playersPerTeam());
-        this.redis.publish(MessageChannels.matchChannel(result.serverId()), this.codec.toJson(startMessage));
+        this.redis.push(MessageChannels.matchQueue(result.serverId()), this.codec.toJson(startMessage));
         this.eventBus.fire(new MatchProvisionedEvent(match, result.serverId()));
         this.logger.info("Match {} provisioned on server {}", match.id(), result.serverId());
     }

@@ -21,6 +21,7 @@ public final class InMemoryTournamentRedis implements TournamentRedis {
     private final Map<String, List<Consumer<String>>> listeners = new ConcurrentHashMap<>();
     private final Map<String, BlockingQueue<String>> queues = new ConcurrentHashMap<>();
     private final List<String> recordedPublishes = new CopyOnWriteArrayList<>();
+    private final List<String> recordedPushes = new CopyOnWriteArrayList<>();
     private volatile boolean closed;
 
     @Override
@@ -48,7 +49,13 @@ public final class InMemoryTournamentRedis implements TournamentRedis {
 
     @Override
     public void push(String key, String payload) {
+        this.recordedPushes.add(key + "\u0000" + payload);
         this.queues.computeIfAbsent(key, ignored -> new LinkedBlockingQueue<>()).add(payload);
+    }
+
+    /** Every push as {@code key\0payload}, in order. */
+    public List<String> recordedPushes() {
+        return List.copyOf(this.recordedPushes);
     }
 
     @Override

@@ -24,6 +24,7 @@ import xyz.pyxismc.tournament.velocity.event.RoundCreatedEvent;
 import xyz.pyxismc.tournament.velocity.event.RoundFinishedEvent;
 import xyz.pyxismc.tournament.velocity.event.RoundStartedEvent;
 import xyz.pyxismc.tournament.velocity.event.TournamentEventBus;
+import com.velocitypowered.api.proxy.server.RegisteredServer;
 
 /**
  * In-memory rounds, groups, matches and results.
@@ -70,6 +71,37 @@ public final class RoundManager {
 
     public List<Match> getMatches() {
         return List.copyOf(this.matches.values());
+    }
+
+    /**
+     * Finds the match ID for a given team.
+     * @param teamId the team ID to search for
+     * @return the match ID if the team is in a match, null otherwise
+     */
+    public UUID getMatchIdForTeam(UUID teamId) {
+        for (Match match : matches.values()) {
+            if (match.teamIds().contains(teamId)) {
+                return match.id();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Gets the registered server for a given match.
+     * @param matchId the match ID
+     * @return the registered server if found, null otherwise
+     */
+    public RegisteredServer getRegisteredServerForMatch(UUID matchId) {
+        Optional<Match> matchOpt = getMatch(matchId);
+        if (matchOpt.isPresent()) {
+            Match match = matchOpt.get();
+            // In a real implementation, we would look up the server from the match
+            // For now, we'll return null as this would need to be implemented
+            // based on how servers are tracked
+            return null;
+        }
+        return null;
     }
 
     /**

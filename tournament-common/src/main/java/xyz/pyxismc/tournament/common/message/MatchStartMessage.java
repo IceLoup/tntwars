@@ -6,8 +6,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Published by Velocity to {@code tournament:match:<serverId>} once the
- * server is provisioned. The Paper plugin on that server starts the match.
+ * Pushed by Velocity to the {@code tournament:match:<serverId>} Redis list
+ * (queued, not pub/sub) once the server is provisioned. The Paper plugin on
+ * that server pops it and starts the match when it has finished booting.
  *
  * @param playersByTeam the player uuids of every team, keyed by team id
  */

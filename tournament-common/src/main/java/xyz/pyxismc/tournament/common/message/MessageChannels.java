@@ -2,7 +2,7 @@ package xyz.pyxismc.tournament.common.message;
 
 /**
  * Redis keys and channel names of the Velocity <-> Paper protocol.
- * A Paper match server only subscribes to its own match channel.
+ * A Paper match server only consumes its own match instruction key.
  */
 public final class MessageChannels {
 
@@ -18,8 +18,12 @@ public final class MessageChannels {
     private MessageChannels() {
     }
 
-    /** Channel on which the match instructions are published for a server. */
-    public static String matchChannel(String serverId) {
+    /**
+     * Redis list on which the match instructions are queued for a server.
+     * A list (not pub/sub) so a message survives until the freshly booted
+     * match server pops it, even if that happens after the publish.
+     */
+    public static String matchQueue(String serverId) {
         return "tournament:match:" + serverId;
     }
 }

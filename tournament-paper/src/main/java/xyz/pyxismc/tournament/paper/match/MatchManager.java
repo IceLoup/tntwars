@@ -39,6 +39,7 @@ import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.generator.ChunkGenerator;
@@ -89,6 +90,7 @@ public final class MatchManager implements Listener {
     private Map<UUID, RuntimeTeam> runtimeTeams = Map.of();
     private Scoreboard scoreboard;
     private String tournamentName = "Tournament";
+    private final Map<UUID, Location> pendingSpawns = new HashMap<>();
     private int timeoutTaskId = -1;
     private int scoreboardTaskId = -1;
     private int shutdownTaskId = -1;
@@ -125,6 +127,7 @@ public final class MatchManager implements Listener {
         List<ConfiguredTeam> configuredTeams = resolveTeamSlots(world);
         setupScoreboard(message, configuredTeams);
 
+        this.pendingSpawns.clear();
         for (int teamIndex = 0; teamIndex < message.teamIds().size(); teamIndex++) {
             UUID teamId = message.teamIds().get(teamIndex);
             ConfiguredTeam configuredTeam = configuredTeams.get(Math.min(teamIndex, configuredTeams.size() - 1));
@@ -132,19 +135,13 @@ public final class MatchManager implements Listener {
             List<UUID> players = message.playersByTeam().getOrDefault(teamId, List.of());
             for (int playerIndex = 0; playerIndex < players.size(); playerIndex++) {
                 UUID playerId = players.get(playerIndex);
-                Player player = Bukkit.getPlayer(playerId);
-                if (player == null) {
-                    newSession.onPlayerQuit(playerId);
-                    continue;
-                }
                 Location spawn = spawns.get(Math.min(playerIndex, spawns.size() - 1));
-                player.setGameMode(GameMode.SURVIVAL);
-                player.teleport(spawn);
-                giveKit(player);
-                player.setScoreboard(this.scoreboard);
-                MiniMessageUtil.send(player,
-                        "<" + configuredTeam.color() + ">Match " + message.tournamentName()
-                                + " started. Last team standing wins!");
+                this.pendingSpawns.put(playerId, spawn);
+            }
+        }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (playerToTeam.containsKey(player.getUniqueId())) {
+                finalizePlayer(player);
             }
         }
 
@@ -158,12 +155,50 @@ public final class MatchManager implements Listener {
                 new MatchReadyMessage(message.matchId(), message.serverId())));
     }
 
+    /**
+     * Players reach this server only after the match-ready message, so they
+     * are finalized as they join rather than at match start.
+     */
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (this.session == null || !this.session.isMatchPlayer(player.getUniqueId())) {
+            return;
+        }
+        if (this.session.isEliminated(player.getUniqueId())) {
+            return;
+        }
+        finalizePlayer(player);
+    }
+
+    private void finalizePlayer(Player player) {
+        UUID playerId = player.getUniqueId();
+        if (!this.session.isMatchPlayer(playerId)) {
+            return;
+        }
+        Location spawn = this.pendingSpawns.getOrDefault(playerId, player.getLocation());
+        RuntimeTeam team = this.runtimeTeams.get(this.session.teamOf(playerId));
+        player.setGameMode(GameMode.SURVIVAL);
+        player.teleport(spawn);
+        giveKit(player);
+        player.setScoreboard(this.scoreboard);
+        if (team != null && !team.scoreboardTeam().hasEntry(player.getName())) {
+            team.scoreboardTeam().addEntry(player.getName());
+        }
+        if (team != null) {
+            MiniMessageUtil.send(player,
+                    "<" + team.configuredTeam().color() + ">Match " + this.tournamentName
+                            + " started. Last team standing wins!");
+        }
+    }
+
     public synchronized void cancelSession() {
         if (this.session == null) {
             return;
         }
         this.session = null;
         cancelTasks();
+        this.pendingSpawns.clear();
         MiniMessageUtil.setServerName("Unknown");
         MiniMessageUtil.setTournamentName("Tournament");
         this.plugin.getLogger().info("Match session cancelled");

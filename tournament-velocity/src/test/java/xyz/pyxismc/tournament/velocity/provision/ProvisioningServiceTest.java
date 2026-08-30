@@ -103,15 +103,17 @@ class ProvisioningServiceTest {
     }
 
     @Test
-    void startedMatchesAreProvisionedAndPublished() throws InterruptedException {
+    void startedMatchesAreProvisionedAndQueued() throws InterruptedException {
         createService(new SimulatedProvisioner(Duration.ZERO));
         startThreeTeamTournament();
         this.service.start();
         Thread.sleep(300);
 
         assertEquals(1, provisionedEvents().size());
-        assertEquals(1, this.redis.recordedPublishes().size());
-        assertTrue(this.redis.recordedPublishes().getFirst().startsWith("tournament:match:game-"));
+        List<String> matchInstructions = this.redis.recordedPushes().stream()
+                .filter(pushed -> pushed.startsWith("tournament:match:game-"))
+                .toList();
+        assertEquals(1, matchInstructions.size());
     }
 
     @Test
@@ -121,7 +123,11 @@ class ProvisioningServiceTest {
         this.service.start();
         Thread.sleep(300);
 
-        String payload = this.redis.recordedPublishes().getFirst().split("\u0000", 2)[1];
+        String payload = this.redis.recordedPushes().stream()
+                .filter(pushed -> pushed.startsWith("tournament:match:game-"))
+                .findFirst()
+                .orElseThrow()
+                .split("\u0000", 2)[1];
         MatchStartMessage message = new JsonCodec().fromJson(payload, MatchStartMessage.class);
         assertEquals("Summer Cup", message.tournamentName());
         assertEquals(3, message.playersPerTeam());
@@ -181,7 +187,8 @@ class ProvisioningServiceTest {
         this.service.start();
         Thread.sleep(300);
         assertTrue(provisionedEvents().isEmpty());
-        assertTrue(this.redis.recordedPublishes().isEmpty());
+        assertTrue(this.redis.recordedPushes().stream()
+                .noneMatch(pushed -> pushed.startsWith("tournament:match:")));
     }
 
     @Test
@@ -193,6 +200,7 @@ class ProvisioningServiceTest {
         this.service.start();
         Thread.sleep(300);
         assertTrue(provisionedEvents().isEmpty());
-        assertTrue(this.redis.recordedPublishes().isEmpty());
+        assertTrue(this.redis.recordedPushes().stream()
+                .noneMatch(pushed -> pushed.startsWith("tournament:match:")));
     }
 }

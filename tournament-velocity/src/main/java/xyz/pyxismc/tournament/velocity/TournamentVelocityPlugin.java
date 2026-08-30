@@ -29,6 +29,7 @@ import xyz.pyxismc.tournament.common.redis.JedisTournamentRedis;
 import xyz.pyxismc.tournament.common.redis.TournamentRedis;
 import xyz.pyxismc.tournament.velocity.command.TeamCommand;
 import xyz.pyxismc.tournament.velocity.command.TournamentCommand;
+import xyz.pyxismc.tournament.velocity.command.RejoinCommand;
 import xyz.pyxismc.tournament.velocity.config.TournamentConfig;
 import xyz.pyxismc.tournament.velocity.config.TournamentConfig.DatabaseSettings;
 import xyz.pyxismc.tournament.velocity.config.TournamentConfig.DockerSettings;
@@ -137,17 +138,21 @@ public final class TournamentVelocityPlugin {
         this.eventBus.subscribe(TournamentCancelledEvent.class, this.matchServerLifecycle::onTournamentCancelled);
 
         CommandManager commandManager = this.proxy.getCommandManager();
-        commandManager.register(commandManager.metaBuilder("team")
-                        .aliases("teams")
-                        .plugin(this)
-                        .build(),
+commandManager.register(commandManager.metaBuilder("team")
+                .aliases("teams")
+                .plugin(this)
+                .build(),
                 new TeamCommand(this.proxy, this.teamManager));
         commandManager.register(commandManager.metaBuilder("tournament")
-                        .aliases("tntwar", "tnt")
-                        .plugin(this)
-                        .build(),
+                .aliases("tntwar", "tnt")
+                .plugin(this)
+                .build(),
                 new TournamentCommand(this.config, this.tournamentManager, this.roundManager, this.teamManager,
                         this.repository));
+        commandManager.register(commandManager.metaBuilder("rejoin")
+                .plugin(this)
+                .build(),
+                new RejoinCommand(this.tournamentManager, this.teamManager, this.roundManager, this.eventBus, this.config));
     }
 
     @Subscribe
@@ -260,6 +265,13 @@ public final class TournamentVelocityPlugin {
             for (TeamPlayer player : team.players()) {
                 this.proxy.getPlayer(player.playerId()).ifPresent(proxyPlayer ->
                         proxyPlayer.createConnectionRequest(server).connect());
+                // Delay between transfers to prevent lag (5 players per second = 200ms delay)
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
         this.logger.info("Match {} players transferred to {}", matchId, server.getServerInfo().getName());
