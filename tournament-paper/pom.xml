@@ -104,13 +104,6 @@
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <shadedArtifactAttached>false</shadedArtifactAttached>
-
-                            <artifactSet>
-                                <includes>
-                                    <include>xyz.pyxismc:tournament-common</include>
-                                </includes>
-                            </artifactSet>
-
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -122,6 +115,7 @@
                                 </filter>
                             </filters>
                         </configuration>
+
                     </execution>
                 </executions>
             </plugin>
