@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                          https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Parent -->
     <parent>
         <groupId>xyz.pyxismc</groupId>
         <artifactId>tournament</artifactId>
@@ -23,20 +20,16 @@
 
     <dependencies>
 
-        <!-- Paper API -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
         </dependency>
 
-        <!-- Shared tournament module -->
         <dependency>
             <groupId>xyz.pyxismc</groupId>
             <artifactId>tournament-common</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
-        <!-- Adventure -->
         <dependency>
             <groupId>net.kyori</groupId>
             <artifactId>adventure-api</artifactId>
@@ -51,11 +44,9 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- PlaceholderAPI -->
         <dependency>
             <groupId>me.clip</groupId>
             <artifactId>placeholderapi</artifactId>
-            <version>${placeholderapi.version}</version>
             <scope>provided</scope>
         </dependency>
 
@@ -63,13 +54,12 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
 
     </dependencies>
 
-    <!-- PlaceholderAPI n'est pas publié sur papermc-repo ni sur Maven Central. -->
+    <!-- PlaceholderAPI -->
     <repositories>
         <repository>
             <id>extendedclip-repo</id>
@@ -92,9 +82,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <release>${java.version}</release>
-                </configuration>
             </plugin>
 
             <!--
@@ -109,14 +96,13 @@
                     <execution>
                         <id>shade</id>
                         <phase>package</phase>
+
                         <goals>
                             <goal>shade</goal>
                         </goals>
 
                         <configuration>
-
                             <createDependencyReducedPom>false</createDependencyReducedPom>
-
                             <shadedArtifactAttached>false</shadedArtifactAttached>
 
                             <artifactSet>
@@ -135,14 +121,15 @@
                                     </excludes>
                                 </filter>
                             </filters>
-
                         </configuration>
                     </execution>
                 </executions>
-
             </plugin>
 
         </plugins>
 
     </build>
+
 </project>
+
+
