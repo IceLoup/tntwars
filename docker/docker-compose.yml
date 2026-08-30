@@ -64,8 +64,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: 
     networks: [tournament]
-
   gameserver-template:
     # Build-only template image used by the Velocity plugin for dynamic matches.
     # It is behind a profile so `up` does not start a permanent match server.
@@ -83,3 +86,8 @@ networks:
 
 volumes:
   pgdata:
+
+
+
+
+
