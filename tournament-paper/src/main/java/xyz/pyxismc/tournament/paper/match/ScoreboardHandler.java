@@ -24,6 +24,11 @@ import xyz.pyxismc.tournament.paper.message.MiniMessageUtil;
  */
 public final class ScoreboardHandler {
 
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.builder()
+            .hexColors()
+            .useUnusualXRepeatedCharacterHexFormat()
+            .build();
+
     private final JavaPlugin plugin;
     private volatile MatchSession session;
     private Map<UUID, RuntimeTeam> runtimeTeams = Map.of();
@@ -208,29 +213,34 @@ public final class ScoreboardHandler {
 
         // Team lines - we need to map team IDs to colors
         Map<UUID, String> teamIdToColor = new java.util.HashMap<>();
+        Map<UUID, String> teamIdToName = new java.util.HashMap<>();
         for (UUID teamId : current.teamIds()) {
             RuntimeTeam team = this.runtimeTeams.get(teamId);
             if (team != null) {
                 teamIdToColor.put(teamId, team.configuredTeam().color());
+                teamIdToName.put(teamId, team.name());
             }
         }
 
         // Rose team (Rose Pastel: #FF55FF)
         UUID roseTeamId = findTeamIdByColor(teamIdToColor, "#FF55FF");
         int aliveRose = roseTeamId != null ? current.aliveCount(roseTeamId) : 0;
-        String roseLine = ":rose:<#BDD4E7> " + aliveRose;
+        String roseName = roseTeamId != null ? teamIdToName.get(roseTeamId) : "Rose";
+        String roseLine = "<#FF55FF>" + roseName + "<#BDD4E7> " + aliveRose;
         addLine(objective, MiniMessageUtil.deserialize(roseLine), score--);
 
         // Aqua team (Aqua: #55FFFF)
         UUID aquaTeamId = findTeamIdByColor(teamIdToColor, "#55FFFF");
         int aliveAqua = aquaTeamId != null ? current.aliveCount(aquaTeamId) : 0;
-        String aquaLine = ":aqua:<#BDD4E7> " + aliveAqua;
+        String aquaName = aquaTeamId != null ? teamIdToName.get(aquaTeamId) : "Aqua";
+        String aquaLine = "<#55FFFF>" + aquaName + "<#BDD4E7> " + aliveAqua;
         addLine(objective, MiniMessageUtil.deserialize(aquaLine), score--);
 
         // Lime team (Lime: #55FF55)
         UUID limeTeamId = findTeamIdByColor(teamIdToColor, "#55FF55");
         int aliveLime = limeTeamId != null ? current.aliveCount(limeTeamId) : 0;
-        String limeLine = ":lime:<#BDD4E7> " + aliveLime;
+        String limeName = limeTeamId != null ? teamIdToName.get(limeTeamId) : "Lime";
+        String limeLine = "<#55FF55>" + limeName + "<#BDD4E7> " + aliveLime;
         addLine(objective, MiniMessageUtil.deserialize(limeLine), score--);
 
         // Empty line
@@ -261,23 +271,16 @@ public final class ScoreboardHandler {
         addLine(objective, "", score--);
 
         // Captain line
-        UUID captainUUID = getCaptainUUID(); // TODO
         String captainName = getCaptainName(); // TODO
-        String captainLine = "- <head:uuid}> {captain}"
-                .replace("uuid", captainUUID.toString())
-                .replace("{captain}", captainName);
+        String captainLine = "<#55FFFF>✦</#55FFFF> <#FFFFFF>" + captainName;
         addLine(objective, MiniMessageUtil.deserialize(captainLine), score--);
 
         // Player lines: two players
-        java.util.List<UUID> playerUUIDs = getPlayerUUIDs(); // TODO: should return a list of at least 2 uuids
         java.util.List<String> playerNames = getPlayerNames(); // TODO
         for (int i = 0; i < 2; i++) {
-            if (i < playerUUIDs.size()) {
-                UUID playerUUID = playerUUIDs.get(i);
+            if (i < playerNames.size()) {
                 String playerName = playerNames.get(i);
-                String playerLine = "- <head:uuid> {player}"
-                        .replace("uuid", playerUUID.toString())
-                        .replace("{player}", playerName);
+                String playerLine = "<#BDD4E7>-</#BDD4E7> <#FFFFFF>" + playerName;
                 addLine(objective, MiniMessageUtil.deserialize(playerLine), score--);
             } else {
                 // Not enough players, show a placeholder
@@ -310,7 +313,7 @@ public final class ScoreboardHandler {
     }
 
     private static void addLine(Objective objective, Component component, int score) {
-        String text = LegacyComponentSerializer.legacySection().serialize(component);
+        String text = LEGACY.serialize(component);
         addLine(objective, text, score);
     }
 
@@ -347,33 +350,12 @@ public final class ScoreboardHandler {
         return "Diamond"; // TODO: replace with actual lobby data
     }
 
-    private UUID getCaptainUUID() {
-        // Return the UUID of the first online player, or a random UUID if none
-        Collection<? extends Player> players = Bukkit.getOnlinePlayers();
-        if (!players.isEmpty()) {
-            return players.iterator().next().getUniqueId();
-        }
-        return java.util.UUID.randomUUID(); // placeholder
-    }
-
     private String getCaptainName() {
         Collection<? extends Player> players = Bukkit.getOnlinePlayers();
         if (!players.isEmpty()) {
             return players.iterator().next().getName();
         }
         return "Captain"; // TODO
-    }
-
-    private java.util.List<UUID> getPlayerUUIDs() {
-        java.util.List<UUID> uuids = new java.util.ArrayList<>();
-        Collection<? extends Player> players = Bukkit.getOnlinePlayers();
-        java.util.Iterator<? extends Player> it = players.iterator();
-        int count = 0;
-        while (it.hasNext() && count < 2) {
-            uuids.add(it.next().getUniqueId());
-            count++;
-        }
-        return uuids;
     }
 
     private java.util.List<String> getPlayerNames() {
