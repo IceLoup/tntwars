@@ -5,17 +5,12 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -28,10 +23,10 @@ import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.block.Block;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.TNTPrimed;
-import org.bukkit.entity.Arrow;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -50,120 +45,77 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scoreboard.DisplaySlot;
-import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
 
 import xyz.pyxismc.tournament.common.message.JsonCodec;
+import xyz.pyxismc.tournament.common.message.MatchStartMessage;
 import xyz.pyxismc.tournament.common.message.MatchReadyMessage;
 import xyz.pyxismc.tournament.common.message.MatchResultMessage;
-import xyz.pyxismc.tournament.common.message.MatchStartMessage;
 import xyz.pyxismc.tournament.common.message.MessageChannels;
 import xyz.pyxismc.tournament.common.redis.TournamentRedis;
 import xyz.pyxismc.tournament.common.result.MatchResult;
-import xyz.pyxismc.tournament.paper.match.MatchSession;
 import xyz.pyxismc.tournament.paper.message.MiniMessageUtil;
 
+/**
+ * Manages the match lifecycle and delegates scoreboard updates to ScoreboardHandler.
+ */
 public final class MatchManager implements Listener {
 
     private static final String ARENA_TIMEOUT_KEY = "arena.timeout-seconds";
     private static final String ARENA_WORLD_KEY = "arena.world";
     private static final String ARENA_TEAMS_KEY = "arena.teams";
     private static final String ARENA_SPAWNS_KEY = "arena.spawns";
-
     private static final String EXPLOSION_SECTION_KEY = "arena.explosion";
     private static final String EXPLOSION_POWER_KEY = "power";
     private static final String EXPLOSION_FIRE_KEY = "fire";
     private static final String EXPLOSION_BLOCKS_KEY = "break-blocks";
-
     private static final String FINISH_DELAY_KEY = "finish.shutdown-delay-seconds";
     private static final String FINISH_LOBBY_KEY = "finish.lobby-server";
-
     private static final String BUNGEE_CHANNEL = "BungeeCord";
 
     private static final List<TeamColor> DEFAULT_COLORS = List.of(
             new TeamColor("aqua", "Aqua", "#55FFFF"),
             new TeamColor("rose_pastel", "Rose Pastel", "#FF55FF"),
-            new TeamColor("lime", "Lime", "#55FF55")
-    );
+            new TeamColor("lime", "Lime", "#55FF55"));
 
     private final JavaPlugin plugin;
     private final TournamentRedis redis;
     private final JsonCodec codec;
-
     private final Map<TntBlockKey, Location> pendingTntSnaps = new HashMap<>();
-    private final Map<UUID, Location> pendingSpawns = new HashMap<>();
 
     private volatile MatchSession session;
     private Map<UUID, RuntimeTeam> runtimeTeams = Map.of();
-
-    private Scoreboard scoreboard;
-
     private String tournamentName = "Tournament";
-
+    private final Map<UUID, Location> pendingSpawns = new HashMap<>();
     private int timeoutTaskId = -1;
-    private int scoreboardTaskId = -1;
     private int shutdownTaskId = -1;
 
-    public MatchManager(
-            JavaPlugin plugin,
-            TournamentRedis redis,
-            JsonCodec codec
-    ) {
+    private final ScoreboardHandler scoreboardHandler;
+
+    public MatchManager(JavaPlugin plugin, TournamentRedis redis, JsonCodec codec) {
         this.plugin = plugin;
         this.redis = redis;
         this.codec = codec;
-
-        this.scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-
-        Objective objective = this.scoreboard.registerNewObjective(
-                "tntwars",
-                "dummy",
-                MiniMessageUtil.deserialize(
-                        "<gradient:#8693AB:#BDD4E7>ᴛɴᴛᴡᴀʀꜱ</gradient>"
-                )
-        );
-
-        objective.setDisplaySlot(DisplaySlot.SIDEBAR);
-
-        this.scoreboardTaskId = Bukkit.getScheduler()
-                .runTaskTimer(
-                        this.plugin,
-                        this::updateScoreboard,
-                        0L,
-                        20L
-                )
-                .getTaskId();
+        this.scoreboardHandler = new ScoreboardHandler(plugin);
     }
 
     public synchronized void startMatch(MatchStartMessage message) {
         if (this.session != null) {
-            this.plugin.getLogger().warning(
-                    "A match is already running, ignoring match "
-                            + message.matchId()
-            );
+            this.plugin.getLogger().warning("A match is already running, ignoring match " + message.matchId());
             return;
         }
 
         Map<UUID, UUID> playerToTeam = new LinkedHashMap<>();
-
         for (UUID teamId : message.teamIds()) {
-            for (UUID playerId : message.playersByTeam()
-                    .getOrDefault(teamId, List.of())) {
-
+            for (UUID playerId : message.playersByTeam().getOrDefault(teamId, List.of())) {
                 playerToTeam.put(playerId, teamId);
             }
         }
 
         MatchSession newSession = new MatchSession(
-                message.matchId(),
-                message.serverId(),
-                playerToTeam,
-                Instant.now()
-        );
-
+                message.matchId(), message.serverId(), playerToTeam, Instant.now());
         this.session = newSession;
         this.tournamentName = message.tournamentName();
 
@@ -171,221 +123,74 @@ public final class MatchManager implements Listener {
         MiniMessageUtil.setTournamentName(message.tournamentName());
 
         World world = resolveWorld();
-
         applyArenaRules(world);
-
         List<ConfiguredTeam> configuredTeams = resolveTeamSlots(world);
-
-        if (configuredTeams.isEmpty()) {
-            this.plugin.getLogger().severe(
-                    "No arena teams/spawns are configured. "
-                            + "Cannot start match " + message.matchId()
-            );
-
-            cancelSession();
-            return;
-        }
-
-        setupScoreboard(message, configuredTeams);
+        setupScoreboardTeams(message, configuredTeams);
 
         this.pendingSpawns.clear();
-
-        for (int teamIndex = 0;
-             teamIndex < message.teamIds().size();
-             teamIndex++) {
-
+        for (int teamIndex = 0; teamIndex < message.teamIds().size(); teamIndex++) {
             UUID teamId = message.teamIds().get(teamIndex);
-
-            ConfiguredTeam configuredTeam = configuredTeams.get(
-                    Math.min(
-                            teamIndex,
-                            configuredTeams.size() - 1
-                    )
-            );
-
+            ConfiguredTeam configuredTeam = configuredTeams.get(Math.min(teamIndex, configuredTeams.size() - 1));
             List<Location> spawns = configuredTeam.spawns();
-
-            if (spawns.isEmpty()) {
-                continue;
-            }
-
-            List<UUID> players = message.playersByTeam()
-                    .getOrDefault(teamId, List.of());
-
-            for (int playerIndex = 0;
-                 playerIndex < players.size();
-                 playerIndex++) {
-
+            List<UUID> players = message.playersByTeam().getOrDefault(teamId, List.of());
+            for (int playerIndex = 0; playerIndex < players.size(); playerIndex++) {
                 UUID playerId = players.get(playerIndex);
-
-                Location spawn = spawns.get(
-                        Math.min(
-                                playerIndex,
-                                spawns.size() - 1
-                        )
-                );
-
-                this.pendingSpawns.put(
-                        playerId,
-                        spawn.clone()
-                );
+                Location spawn = spawns.get(Math.min(playerIndex, spawns.size() - 1));
+                this.pendingSpawns.put(playerId, spawn);
             }
         }
-
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (playerToTeam.containsKey(player.getUniqueId())) {
                 finalizePlayer(player);
             }
         }
 
-        this.timeoutTaskId = Bukkit.getScheduler()
-                .runTaskLater(
-                        this.plugin,
-                        this::onTimeout,
-                        (long) this.plugin.getConfig().getInt(
-                                ARENA_TIMEOUT_KEY,
-                                300
-                        ) * 20L
-                )
-                .getTaskId();
+        this.timeoutTaskId = Bukkit.getScheduler().runTaskLater(this.plugin, this::onTimeout,
+                (long) this.plugin.getConfig().getInt(ARENA_TIMEOUT_KEY, 300) * 20L).getTaskId();
 
-        this.plugin.getLogger().info(
-                "Match " + message.matchId()
-                        + " started on "
-                        + message.serverId()
-        );
-
-        this.redis.publish(
-                MessageChannels.MATCH_READY,
-                this.codec.toJson(
-                        new MatchReadyMessage(
-                                message.matchId(),
-                                message.serverId()
-                        )
-                )
-        );
+        this.plugin.getLogger().info("Match " + message.matchId() + " started on " + message.serverId());
+        this.redis.publish(MessageChannels.MATCH_READY, this.codec.toJson(
+                new MatchReadyMessage(message.matchId(), message.serverId())));
     }
 
+    /**
+     * Players reach this server only after the match-ready message, so they
+     * are finalized as they join rather than at match start.
+     */
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        this.scoreboardHandler.applyScoreboardToPlayer(player);
 
-        if (this.session == null
-                || !this.session.isMatchPlayer(player.getUniqueId())) {
+        if (this.session == null || !this.session.isMatchPlayer(player.getUniqueId())) {
             return;
         }
-
         if (this.session.isEliminated(player.getUniqueId())) {
             return;
         }
-
         finalizePlayer(player);
-    }
-
-    private void finalizePlayer(Player player) {
-        if (this.session == null) {
-            return;
-        }
-
-        UUID playerId = player.getUniqueId();
-
-        if (!this.session.isMatchPlayer(playerId)) {
-            return;
-        }
-
-        Location spawn = this.pendingSpawns.getOrDefault(
-                playerId,
-                player.getLocation()
-        );
-
-        RuntimeTeam team = this.runtimeTeams.get(
-                this.session.teamOf(playerId)
-        );
-
-        player.setGameMode(GameMode.SURVIVAL);
-        player.teleport(spawn);
-
-        giveKit(player);
-
-        player.setScoreboard(this.scoreboard);
-
-        if (team != null
-                && !team.scoreboardTeam().hasEntry(player.getName())) {
-
-            team.scoreboardTeam().addEntry(player.getName());
-        }
-
-        if (team != null) {
-            MiniMessageUtil.send(
-                    player,
-                    "<" + team.configuredTeam().color()
-                            + ">Match "
-                            + this.tournamentName
-                            + " started. Last team standing wins!"
-            );
-        }
-    }
-
-    public synchronized void cancelSession() {
-        if (this.session == null) {
-            return;
-        }
-
-        this.session = null;
-
-        cancelTasks();
-
-        this.pendingSpawns.clear();
-        this.pendingTntSnaps.clear();
-
-        this.runtimeTeams = Map.of();
-
-        MiniMessageUtil.setServerName("Unknown");
-        MiniMessageUtil.setTournamentName("Tournament");
-
-        this.plugin.getLogger().info(
-                "Match session cancelled"
-        );
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
-        if (this.session == null
-                || !(event.getEntity() instanceof Player victim)) {
+        if (this.session == null || !(event.getEntity() instanceof Player victim)) {
             return;
         }
-
         if (!this.session.isMatchPlayer(victim.getUniqueId())) {
             return;
         }
-
         UUID attackerId = attackerId(event.getDamager());
-
         if (attackerId != null) {
-            UUID victimTeam = this.session.teamOf(
-                    victim.getUniqueId()
-            );
-
+            UUID victimTeam = this.session.teamOf(victim.getUniqueId());
             UUID attackerTeam = this.session.teamOf(attackerId);
-
-            if (attackerTeam != null
-                    && attackerTeam.equals(victimTeam)) {
-
+            if (attackerTeam != null && attackerTeam.equals(victimTeam)) {
                 event.setCancelled(true);
                 return;
             }
-
-            this.session.recordAttacker(
-                    victim.getUniqueId(),
-                    attackerId
-            );
+            this.session.recordAttacker(victim.getUniqueId(), attackerId);
         }
-
         if (!event.isCancelled()) {
-            this.session.recordDamage(
-                    victim.getUniqueId(),
-                    event.getFinalDamage()
-            );
+            this.session.recordDamage(victim.getUniqueId(), event.getFinalDamage());
         }
     }
 
@@ -394,39 +199,16 @@ public final class MatchManager implements Listener {
         if (this.session == null) {
             return;
         }
-
         Player victim = event.getEntity();
-
-        if (!this.session.isMatchPlayer(victim.getUniqueId())
-                || !this.session.isAlive(victim.getUniqueId())) {
+        if (!this.session.isMatchPlayer(victim.getUniqueId()) || !this.session.isAlive(victim.getUniqueId())) {
             return;
         }
-
         event.setDeathMessage(null);
-
-        UUID killerId = victim.getKiller() == null
-                ? null
-                : victim.getKiller().getUniqueId();
-
-        this.session.onPlayerDeath(
-                victim.getUniqueId(),
-                killerId
-        );
-
-        Bukkit.getScheduler().runTask(
-                this.plugin,
-                () -> victim.setGameMode(GameMode.SPECTATOR)
-        );
-
-        MiniMessageUtil.send(
-                victim,
-                MiniMessageUtil.error(
-                        "You are out of the match."
-                )
-        );
-
-        updateScoreboard();
-
+        UUID killerId = victim.getKiller() == null ? null : victim.getKiller().getUniqueId();
+        this.session.onPlayerDeath(victim.getUniqueId(), killerId);
+        Bukkit.getScheduler().runTask(this.plugin, () -> victim.setGameMode(GameMode.SPECTATOR));
+        victim.sendMessage(MiniMessageUtil.error("You are out of the match."));
+        // Note: scoreboard updates automatically via the handler's task
         if (this.session.isOver()) {
             endMatch();
         }
@@ -437,19 +219,12 @@ public final class MatchManager implements Listener {
         if (this.session == null) {
             return;
         }
-
         Player player = event.getPlayer();
-
         if (!this.session.isMatchPlayer(player.getUniqueId())) {
             return;
         }
-
-        this.session.onPlayerQuit(
-                player.getUniqueId()
-        );
-
-        updateScoreboard();
-
+        this.session.onPlayerQuit(player.getUniqueId());
+        // Note: scoreboard updates automatically via the handler's task
         if (this.session.isOver()) {
             endMatch();
         }
@@ -460,76 +235,43 @@ public final class MatchManager implements Listener {
         if (this.session == null || event.isCancelled()) {
             return;
         }
-
         Block block = event.getBlock();
-
-        this.pendingTntSnaps.put(
-                TntBlockKey.of(block),
-                centerOf(block)
-        );
-
-        Bukkit.getScheduler().runTaskLater(
-                this.plugin,
-                () -> this.pendingTntSnaps.remove(
-                        TntBlockKey.of(block)
-                ),
-                2L
-        );
+        this.pendingTntSnaps.put(TntBlockKey.of(block), centerOf(block));
+        Bukkit.getScheduler().runTaskLater(this.plugin,
+                () -> this.pendingTntSnaps.remove(TntBlockKey.of(block)), 2L);
     }
 
     @EventHandler
     public void onEntitySpawn(EntitySpawnEvent event) {
-        if (this.session == null
-                || !(event.getEntity() instanceof TNTPrimed tnt)) {
+        if (this.session == null || !(event.getEntity() instanceof TNTPrimed tnt)) {
             return;
         }
-
-        Location target = snapLocation(
-                tnt.getLocation()
-        );
-
+        Location target = snapLocation(tnt.getLocation());
         tnt.teleport(target);
-
-        tnt.setVelocity(
-                new Vector(0.0, 0.0, 0.0)
-        );
+        tnt.setVelocity(new Vector(0.0, 0.0, 0.0));
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onTntPlace(BlockPlaceEvent event) {
-        if (this.session == null
-                || event.getBlockPlaced().getType() != Material.TNT) {
+        if (this.session == null || event.getBlockPlaced().getType() != Material.TNT) {
             return;
         }
-
         Player player = event.getPlayer();
-
         if (!this.session.isMatchPlayer(player.getUniqueId())) {
             return;
         }
-
-        Bukkit.getScheduler().runTask(
-                this.plugin,
-                () -> player.getInventory().addItem(
-                        new ItemStack(Material.TNT, 1)
-                )
-        );
+        Bukkit.getScheduler().runTask(this.plugin,
+                () -> player.getInventory().addItem(new ItemStack(Material.TNT, 1)));
     }
 
     @EventHandler
     public void onShootBow(EntityShootBowEvent event) {
-        if (this.session == null
-                || !(event.getEntity() instanceof Player shooter)) {
+        if (this.session == null || !(event.getEntity() instanceof Player shooter)) {
             return;
         }
-
-        if (!this.session.isMatchPlayer(shooter.getUniqueId())) {
-            return;
+        if (this.session.isMatchPlayer(shooter.getUniqueId())) {
+            shooter.getInventory().addItem(new ItemStack(Material.ARROW, 1));
         }
-
-        shooter.getInventory().addItem(
-                new ItemStack(Material.ARROW, 1)
-        );
     }
 
     @EventHandler
@@ -537,75 +279,32 @@ public final class MatchManager implements Listener {
         if (this.session == null) {
             return;
         }
-
         Projectile projectile = event.getEntity();
-
-        if (!(projectile instanceof Arrow)
-                || !(projectile.getShooter() instanceof Player shooter)) {
+        if (!(projectile instanceof Arrow) || !(projectile.getShooter() instanceof Player shooter)) {
             return;
         }
-
         if (!this.session.isMatchPlayer(shooter.getUniqueId())) {
             return;
         }
-
-        Location hit;
-
-        if (event.getHitBlock() != null) {
-            hit = event.getHitBlock()
-                    .getLocation()
-                    .add(0.5, 0.5, 0.5);
-
-        } else if (event.getHitEntity() != null) {
-            hit = event.getHitEntity().getLocation();
-
-        } else {
-            hit = projectile.getLocation();
-        }
-
-        var explosion = this.plugin.getConfig()
-                .getConfigurationSection(
-                        EXPLOSION_SECTION_KEY
-                );
-
-        float power = (float) (
-                explosion == null
-                        ? 3.0
-                        : explosion.getDouble(
-                        EXPLOSION_POWER_KEY,
-                        3.0
-                )
-        );
-
-        boolean fire = explosion == null
-                || explosion.getBoolean(
-                EXPLOSION_FIRE_KEY,
-                false
-        );
-
-        boolean breakBlocks = explosion == null
-                || explosion.getBoolean(
-                EXPLOSION_BLOCKS_KEY,
-                false
-        );
-
-        hit.getWorld().createExplosion(
-                hit,
-                power,
-                fire,
-                breakBlocks
-        );
+        Location hit = event.getHitBlock() != null
+                ? event.getHitBlock().getLocation().add(0.5, 0.5, 0.5)
+                : event.getHitEntity() != null ? event.getHitEntity().getLocation() : projectile.getLocation();
+        org.bukkit.configuration.ConfigurationSection explosion = this.plugin.getConfig()
+                .getConfigurationSection(EXPLOSION_SECTION_KEY);
+        float power = (float) (explosion == null ? 3.0 : explosion.getDouble(EXPLOSION_POWER_KEY, 3.0));
+        boolean fire = explosion == null || explosion.getBoolean(EXPLOSION_FIRE_KEY, false);
+        boolean breakBlocks = explosion == null || explosion.getBoolean(EXPLOSION_BLOCKS_KEY, false);
+        hit.getWorld().createExplosion(hit, power, fire, breakBlocks);
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
-        if (this.session == null
-                || !this.session.isMatchPlayer(
-                event.getPlayer().getUniqueId()
-        )) {
+        Player player = event.getPlayer();
+        this.scoreboardHandler.applyScoreboardToPlayer(player);
+
+        if (this.session == null || !this.session.isMatchPlayer(player.getUniqueId())) {
             return;
         }
-
         UUID playerId = event.getPlayer().getUniqueId();
 
         RuntimeTeam team = this.runtimeTeams.get(
@@ -642,19 +341,51 @@ public final class MatchManager implements Listener {
         }
     }
 
+    private void finalizePlayer(Player player) {
+        if (this.session == null) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        if (!this.session.isMatchPlayer(playerId)) {
+            return;
+        }
+        Location spawn = this.pendingSpawns.getOrDefault(playerId, player.getLocation());
+        RuntimeTeam team = this.runtimeTeams.get(this.session.teamOf(playerId));
+        player.setGameMode(GameMode.SURVIVAL);
+        player.teleport(spawn);
+        giveKit(player);
+        this.scoreboardHandler.applyScoreboardToPlayer(player);
+        if (team != null && !team.scoreboardTeam().hasEntry(player.getName())) {
+            team.scoreboardTeam().addEntry(player.getName());
+        }
+        if (team != null) {
+            MiniMessageUtil.send(player,
+                    "<" + team.configuredTeam().color() + ">Match " + this.tournamentName
+                            + " started. Last team standing wins!");
+        }
+    }
+
+    public synchronized void cancelSession() {
+        if (this.session == null) {
+            return;
+        }
+        this.session = null;
+        cancelTasks();
+        this.pendingSpawns.clear();
+        this.pendingTntSnaps.clear();
+        this.runtimeTeams = Map.of();
+        this.scoreboardHandler.clearMatchSession();
+        MiniMessageUtil.setServerName("Unknown");
+        MiniMessageUtil.setTournamentName("Tournament");
+        this.plugin.getLogger().info("Match session cancelled");
+    }
+
     private void onTimeout() {
         if (this.session == null) {
             return;
         }
-
-        this.plugin.getLogger().info(
-                "Match "
-                        + this.session.matchId()
-                        + " timed out, deciding winner"
-        );
-
+        this.plugin.getLogger().info("Match " + this.session.matchId() + " timed out, deciding winner");
         this.session.finishByTimeout();
-
         endMatch();
     }
 
@@ -662,23 +393,9 @@ public final class MatchManager implements Listener {
         if (this.session == null) {
             return;
         }
-
         MatchSession finished = this.session;
-
-        this.session = null;
-
-        if (this.timeoutTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(
-                    this.timeoutTaskId
-            );
-
-            this.timeoutTaskId = -1;
-        }
-
-        MatchResult result = finished.buildResult(
-                finished.matchId()
-        );
-
+        // Note: we do not set session to null yet because we want to show the finished scoreboard
+        MatchResult result = finished.buildResult(finished.matchId());
         this.redis.publish(
                 MessageChannels.MATCH_RESULT,
                 this.codec.toJson(
@@ -689,16 +406,13 @@ public final class MatchManager implements Listener {
                         )
                 )
         );
-
         String winner = winnerName(finished);
-
         this.plugin.getLogger().info(
                 "Match "
                         + finished.matchId()
                         + " finished, winner "
                         + winner
         );
-
         Bukkit.broadcast(
                 MiniMessageUtil.deserialize(
                         MiniMessageUtil.primary(
@@ -707,441 +421,286 @@ public final class MatchManager implements Listener {
                 )
         );
 
-        updateFinishedScoreboard(
-                finished,
-                winner
-        );
+        // Show finished scoreboard for 5 seconds
+        this.scoreboardHandler.updateFinishedScoreboard(finished, winner);
 
-        MiniMessageUtil.setServerName("Unknown");
-        MiniMessageUtil.setTournamentName("Tournament");
-
-        scheduleLobbyReturnAndShutdown();
+        // After 5 seconds, clear the match data from the handler and set session to null
+        Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+            this.scoreboardHandler.clearMatchSession();
+            this.session = null;
+            MiniMessageUtil.setServerName("Unknown");
+            MiniMessageUtil.setTournamentName("Tournament");
+            scheduleLobbyReturnAndShutdown();
+        }, 100L); // 5 seconds (100 ticks = 5 seconds)
     }
 
     private World resolveWorld() {
-        String worldName = this.plugin.getConfig()
-                .getString(
-                        ARENA_WORLD_KEY,
-                        "world"
-                );
-
+        String worldName = this.plugin.getConfig().getString(ARENA_WORLD_KEY, "world");
         World world = Bukkit.getWorld(worldName);
-
         if (world != null) {
             return world;
         }
-
-        this.plugin.getLogger().warning(
-                "Arena world '"
-                        + worldName
-                        + "' not found, generating an empty arena world"
-        );
-
-        World created = Bukkit.createWorld(
-                new WorldCreator(worldName)
-                        .generator(new VoidChunkGenerator())
-        );
-
+        this.plugin.getLogger().warning("Arena world '" + worldName
+                + "' not found, generating an empty arena world");
+        World created = Bukkit.createWorld(new WorldCreator(worldName).generator(new VoidChunkGenerator()));
         if (created == null) {
             return Bukkit.getWorlds().getFirst();
         }
-
         List<ConfiguredTeam> teams = resolveTeamSlots(created);
-
         for (ConfiguredTeam team : teams) {
             for (Location spawn : team.spawns()) {
-                createPlatform(
-                        created,
-                        spawn
-                );
+                createPlatform(created, spawn);
             }
         }
-
-        if (!teams.isEmpty()
-                && !teams.getFirst().spawns().isEmpty()) {
-
-            Location first = teams.getFirst()
-                    .spawns()
-                    .getFirst();
-
-            created.setSpawnLocation(
-                    first.getBlockX(),
-                    first.getBlockY(),
-                    first.getBlockZ()
-            );
+        if (!teams.isEmpty() && !teams.getFirst().spawns().isEmpty()) {
+            Location first = teams.getFirst().spawns().getFirst();
+            created.setSpawnLocation(first.getBlockX(), first.getBlockY(), first.getBlockZ());
         }
-
         return created;
     }
 
-    private static void createPlatform(
-            World world,
-            Location spawn
-    ) {
+    private static void createPlatform(World world, Location spawn) {
         int x = spawn.getBlockX();
         int y = spawn.getBlockY() - 1;
         int z = spawn.getBlockZ();
-
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
-                world.getBlockAt(
-                        x + dx,
-                        y,
-                        z + dz
-                ).setType(Material.OBSIDIAN);
+                world.getBlockAt(x + dx, y, z + dz).setType(Material.OBSIDIAN);
             }
         }
     }
 
-    private static final class VoidChunkGenerator
-            extends ChunkGenerator {
+    private static final class VoidChunkGenerator extends ChunkGenerator {
     }
 
     private List<ConfiguredTeam> resolveTeamSlots(World world) {
         List<ConfiguredTeam> teams = new ArrayList<>();
-
-        List<Map<?, ?>> configured =
-                this.plugin.getConfig()
-                        .getMapList(ARENA_TEAMS_KEY);
-
-        for (int index = 0;
-             index < configured.size();
-             index++) {
-
+        List<Map<?, ?>> configured = this.plugin.getConfig().getMapList(ARENA_TEAMS_KEY);
+        for (int index = 0; index < configured.size(); index++) {
             Map<?, ?> raw = configured.get(index);
-
-            TeamColor color = colorOf(
-                    text(
-                            raw,
-                            "color",
-                            DEFAULT_COLORS
-                                    .get(
-                                            index % DEFAULT_COLORS.size()
-                                    )
-                                    .key()
-                    )
-            );
-
-            String displayName = text(
-                    raw,
-                    "display-name",
-                    color.displayName()
-            );
-
-            List<Location> spawns = parseSpawns(
-                    world,
-                    raw.get("spawns")
-            );
-
+            TeamColor color = colorOf(text(raw, "color", DEFAULT_COLORS.get(index % DEFAULT_COLORS.size()).key()));
+            String displayName = text(raw, "display-name", color.displayName());
+            List<Location> spawns = parseSpawns(world, raw.get("spawns"));
             if (spawns.isEmpty()) {
-                spawns = List.of(
-                        world.getSpawnLocation()
-                );
+                spawns = List.of(world.getSpawnLocation());
             }
-
-            teams.add(
-                    new ConfiguredTeam(
-                            color.key(),
-                            displayName,
-                            color.chatColor(),
-                            spawns
-                    )
-            );
+            teams.add(new ConfiguredTeam(color.key(), displayName, color.chatColor(), spawns));
         }
-
         if (!teams.isEmpty()) {
             return teams;
         }
-
-        List<Location> legacySpawns =
-                resolveLegacySpawns(world);
-
-        int teamCount = Math.max(
-                DEFAULT_COLORS.size(),
-                legacySpawns.size()
-        );
-
-        for (int i = 0; i < teamCount; i++) {
-            TeamColor color =
-                    DEFAULT_COLORS.get(
-                            i % DEFAULT_COLORS.size()
-                    );
-
-            Location spawn = legacySpawns.get(
-                    Math.min(
-                            i,
-                            legacySpawns.size() - 1
-                    )
-            );
-
-            teams.add(
-                    new ConfiguredTeam(
-                            color.key(),
-                            color.displayName(),
-                            color.chatColor(),
-                            List.of(spawn)
-                    )
-            );
+        List<Location> legacySpawns = resolveLegacySpawns(world);
+        for (int i = 0; i < Math.max(DEFAULT_COLORS.size(), legacySpawns.size()); i++) {
+            TeamColor color = DEFAULT_COLORS.get(i % DEFAULT_COLORS.size());
+            Location spawn = legacySpawns.get(Math.min(i, legacySpawns.size() - 1));
+            teams.add(new ConfiguredTeam(color.key(), color.displayName(), color.chatColor(), List.of(spawn)));
         }
-
         return teams;
     }
 
     private List<Location> resolveLegacySpawns(World world) {
         List<Location> spawns = new ArrayList<>();
-
-        for (Map<?, ?> raw :
-                this.plugin.getConfig()
-                        .getMapList(ARENA_SPAWNS_KEY)) {
-
-            spawns.add(
-                    location(world, raw)
-            );
+        for (Map<?, ?> raw : this.plugin.getConfig().getMapList(ARENA_SPAWNS_KEY)) {
+            spawns.add(location(world, raw));
         }
-
-        return spawns.isEmpty()
-                ? List.of(world.getSpawnLocation())
-                : spawns;
+        return spawns.isEmpty() ? List.of(world.getSpawnLocation()) : spawns;
     }
 
-    private static List<Location> parseSpawns(
-            World world,
-            Object rawSpawns
-    ) {
+    private static List<Location> parseSpawns(World world, Object rawSpawns) {
         if (!(rawSpawns instanceof List<?> list)) {
             return List.of();
         }
-
-        List<Location> spawns =
-                new ArrayList<>();
-
+        List<Location> spawns = new ArrayList<>();
         for (Object entry : list) {
             if (entry instanceof Map<?, ?> spawn) {
-                spawns.add(
-                        location(world, spawn)
-                );
+                spawns.add(location(world, spawn));
             }
         }
-
         return spawns;
     }
 
-    private static Location location(
-            World world,
-            Map<?, ?> map
-    ) {
-        double x = number(
-                map,
-                "x",
-                0.0
-        );
-
-        double y = number(
-                map,
-                "y",
-                64.0
-        );
-
-        double z = number(
-                map,
-                "z",
-                0.0
-        );
-
-        float yaw = (float) number(
-                map,
-                "yaw",
-                0.0
-        );
-
-        float pitch = (float) number(
-                map,
-                "pitch",
-                0.0
-        );
-
-        return new Location(
-                world,
-                x,
-                y,
-                z,
-                yaw,
-                pitch
-        );
+    private static Location location(World world, Map<?, ?> map) {
+        double x = number(map, "x", 0.0);
+        double y = number(map, "y", 64.0);
+        double z = number(map, "z", 0.0);
+        float yaw = (float) number(map, "yaw", 0.0);
+        float pitch = (float) number(map, "pitch", 0.0);
+        return new Location(world, x, y, z, yaw, pitch);
     }
 
-    private static double number(
-            Map<?, ?> map,
-            String key,
-            double fallback
-    ) {
+    private static double number(Map<?, ?> map, String key, double fallback) {
         Object value = map.get(key);
-
-        return value instanceof Number number
-                ? number.doubleValue()
-                : fallback;
+        return value instanceof Number number ? number.doubleValue() : fallback;
     }
 
-    private static String text(
-            Map<?, ?> map,
-            String key,
-            String fallback
-    ) {
+    private static String text(Map<?, ?> map, String key, String fallback) {
         Object value = map.get(key);
-
-        return value == null
-                || value.toString().isBlank()
-                ? fallback
-                : value.toString();
+        return value == null || value.toString().isBlank() ? fallback : value.toString();
     }
 
     private void applyArenaRules(World world) {
-        world.setGameRule(
-                GameRule.FALL_DAMAGE,
-                false
-        );
-
-        world.setGameRule(
-                GameRule.DO_MOB_SPAWNING,
-                false
-        );
-
-        world.setGameRule(
-                GameRule.DO_DAYLIGHT_CYCLE,
-                false
-        );
-
-        world.setGameRule(
-                GameRule.DO_WEATHER_CYCLE,
-                false
-        );
-
-        world.setGameRule(
-                GameRule.DO_FIRE_TICK,
-                false
-        );
-
-        world.setGameRule(
-                GameRule.KEEP_INVENTORY,
-                true
-        );
-
-        world.setGameRule(
-                GameRule.ANNOUNCE_ADVANCEMENTS,
-                false
-        );
-
-        world.setGameRule(
-                GameRule.WATER_SOURCE_CONVERSION,
-                false
-        );
+        world.setGameRule(GameRule.FALL_DAMAGE, false);
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+        world.setGameRule(GameRule.DO_FIRE_TICK, false);
+        world.setGameRule(GameRule.KEEP_INVENTORY, true);
+        world.setGameRule(GameRule.ANNOUNCE_ADVANCEMENTS, false);
+        world.setGameRule(GameRule.WATER_SOURCE_CONVERSION, false);
     }
 
-    private void setupScoreboard(
-            MatchStartMessage message,
-            List<ConfiguredTeam> configuredTeams
-    ) {
-        this.scoreboard =
-                Bukkit.getScoreboardManager()
-                        .getNewScoreboard();
-
-        Objective objective =
-                this.scoreboard.registerNewObjective(
-                        "tntwars",
-                        "dummy",
-                        MiniMessageUtil.deserialize(
-                                "<gradient:#8693AB:#BDD4E7>"
-                                        + "ᴛɴᴛᴡᴀʀꜱ"
-                                        + "</gradient>"
-                        )
-                );
-
-        objective.setDisplaySlot(
-                DisplaySlot.SIDEBAR
-        );
-
-        Map<UUID, RuntimeTeam> teams =
-                new LinkedHashMap<>();
-
-        for (int index = 0;
-             index < message.teamIds().size();
-             index++) {
-
-            UUID teamId =
-                    message.teamIds().get(index);
-
-            ConfiguredTeam configuredTeam =
-                    configuredTeams.get(
-                            Math.min(
-                                    index,
-                                    configuredTeams.size() - 1
-                            )
-                    );
-
-            String teamName =
-                    message.teamNames()
-                            .getOrDefault(
-                                    teamId,
-                                    configuredTeam.displayName()
-                            );
-
-            Team scoreboardTeam =
-                    this.scoreboard.registerNewTeam(
-                            "tw" + index
-                    );
-
-            scoreboardTeam.setColor(
-                    toChatColor(
-                            configuredTeam.color()
-                    )
-            );
-
-            scoreboardTeam.setPrefix(
-                    toChatColor(
-                            configuredTeam.color()
-                    )
-                            + "["
-                            + teamName
-                            + "] "
-                            + ChatColor.RESET
-            );
-
-            for (UUID playerId :
-                    message.playersByTeam()
-                            .getOrDefault(
-                                    teamId,
-                                    List.of()
-                            )) {
-
-                Player player =
-                        Bukkit.getPlayer(playerId);
-
+    private void setupScoreboardTeams(MatchStartMessage message, List<ConfiguredTeam> configuredTeams) {
+        Map<UUID, RuntimeTeam> teams = new LinkedHashMap<>();
+        for (int index = 0; index < message.teamIds().size(); index++) {
+            UUID teamId = message.teamIds().get(index);
+            ConfiguredTeam configuredTeam = configuredTeams.get(Math.min(index, configuredTeams.size() - 1));
+            String teamName = message.teamNames().getOrDefault(teamId, configuredTeam.displayName());
+            Scoreboard scoreboard = this.scoreboardHandler.getScoreboard();
+            if (scoreboard == null) {
+                return;
+            }
+            Team scoreboardTeam = scoreboard.registerNewTeam("tw" + index);
+            scoreboardTeam.setColor(toChatColor(configuredTeam.color()));
+            scoreboardTeam.setPrefix(toChatColor(configuredTeam.color()) + "[" + teamName + "] " + ChatColor.RESET);
+            for (UUID playerId : message.playersByTeam().getOrDefault(teamId, List.of())) {
+                Player player = Bukkit.getPlayer(playerId);
                 if (player != null) {
-                    scoreboardTeam.addEntry(
-                            player.getName()
-                    );
+                    scoreboardTeam.addEntry(player.getName());
                 }
             }
-
-            teams.put(
-                    teamId,
-                    new RuntimeTeam(
-                            teamName,
-                            configuredTeam,
-                            scoreboardTeam
-                    )
-            );
+            teams.put(teamId, new RuntimeTeam(teamName, configuredTeam, scoreboardTeam));
         }
-
         this.runtimeTeams = teams;
+        // Set the match data in the scoreboard handler
+        this.scoreboardHandler.setMatchSession(this.session, this.runtimeTeams);
     }
 
-    private static ChatColor toChatColor(
-            String hexColor
-    ) {
-        return switch (
-                hexColor.toLowerCase(Locale.ROOT)
-                ) {
+    private void giveKit(Player player) {
+        PlayerInventory inventory = player.getInventory();
+        inventory.clear();
+        org.bukkit.configuration.ConfigurationSection armor = this.plugin.getConfig()
+                .getConfigurationSection("kit.armor");
+        if (armor != null) {
+            inventory.setHelmet(item(armor.getString("helmet"), 1, null));
+            inventory.setChestplate(item(armor.getString("chestplate"), 1, null));
+            inventory.setLeggings(item(armor.getString("leggings"), 1, null));
+            inventory.setBoots(item(armor.getString("boots"), 1, null));
+        }
+
+        for (Map<?, ?> raw : this.plugin.getConfig().getMapList("kit.inventory")) {
+            int slot = (int) number(raw, "slot", -1);
+            if (slot < 0 || slot >= inventory.getSize()) {
+                continue;
+            }
+            String material = text(raw, "material", "AIR");
+            int amount = Math.max(1, Math.min(64, (int) number(raw, "amount", 1)));
+            inventory.setItem(slot, item(material, amount, raw.get("enchantments")));
+        }
+        player.updateInventory();
+    }
+
+    private ItemStack item(String materialName, int amount, Object enchantments) {
+        if (materialName == null) {
+            return null;
+        }
+        Material material = Material.matchMaterial(materialName);
+        if (material == null || material == Material.AIR) {
+            return null;
+        }
+        ItemStack stack = new ItemStack(material, amount);
+        if (enchantments instanceof Map<?, ?> map && !map.isEmpty()) {
+            ItemMeta meta = stack.getItemMeta();
+            if (meta != null) {
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    Enchantment enchantment = Enchantment.getByKey(NamespacedKey.minecraft(
+                            String.valueOf(entry.getKey()).toLowerCase(Locale.ROOT)));
+                    if (enchantment != null && entry.getValue() instanceof Number level) {
+                        meta.addEnchant(enchantment, Math.max(1, level.intValue()), true);
+                    }
+                }
+                stack.setItemMeta(meta);
+            }
+        }
+        return stack;
+    }
+
+    private Location snapLocation(Location spawned) {
+        TntBlockKey key = TntBlockKey.of(spawned);
+        Location target = this.pendingTntSnaps.remove(key);
+        if (target != null) {
+            return target;
+        }
+        return new Location(spawned.getWorld(),
+                spawned.getBlockX() + 0.5,
+                spawned.getBlockY(),
+                spawned.getBlockZ() + 0.5,
+                spawned.getYaw(),
+                spawned.getPitch());
+    }
+
+    private static Location centerOf(Block block) {
+        return new Location(block.getWorld(),
+                block.getX() + 0.5,
+                block.getY(),
+                block.getZ() + 0.5);
+    }
+
+    private static UUID attackerId(org.bukkit.entity.Entity damager) {
+        if (damager instanceof Player player) {
+            return player.getUniqueId();
+        }
+        if (damager instanceof Projectile projectile && projectile.getShooter() instanceof Player player) {
+            return player.getUniqueId();
+        }
+        return null;
+    }
+
+    private void scheduleLobbyReturnAndShutdown() {
+        int delaySeconds = this.plugin.getConfig().getInt(FINISH_DELAY_KEY, 5);
+        this.shutdownTaskId = Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
+            String lobby = this.plugin.getConfig().getString(FINISH_LOBBY_KEY, "lobby");
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                sendToLobby(player, lobby);
+            }
+            Bukkit.getScheduler().runTaskLater(this.plugin, Bukkit::shutdown, 20L);
+        }, Math.max(0, delaySeconds) * 20L).getTaskId();
+    }
+
+    private void sendToLobby(Player player, String lobby) {
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(bytes)) {
+            out.writeUTF("Connect");
+            out.writeUTF(lobby);
+            player.sendPluginMessage(this.plugin, BUNGEE_CHANNEL, bytes.toByteArray());
+        } catch (IOException e) {
+            this.plugin.getLogger().warning("Could not send " + player.getName() + " to lobby: " + e.getMessage());
+        }
+    }
+
+    private void cancelTasks() {
+        if (this.timeoutTaskId != -1) {
+            Bukkit.getScheduler().cancelTask(this.timeoutTaskId);
+            this.timeoutTaskId = -1;
+        }
+        if (this.shutdownTaskId != -1) {
+            Bukkit.getScheduler().cancelTask(this.shutdownTaskId);
+            this.shutdownTaskId = -1;
+        }
+        // Note: the scoreboard task is managed by the ScoreboardHandler and is not cancelled here
+    }
+
+    private static TeamColor colorOf(String configured) {
+        String key = configured.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        for (TeamColor color : DEFAULT_COLORS) {
+            if (color.key().equals(key)) {
+                return color;
+            }
+        }
+        return DEFAULT_COLORS.getFirst();
+    }
+
+    private static ChatColor toChatColor(String hexColor) {
+        return switch (hexColor.toLowerCase(Locale.ROOT)) {
             case "#55ffff" -> ChatColor.AQUA;
             case "#ff55ff" -> ChatColor.LIGHT_PURPLE;
             case "#55ff55" -> ChatColor.GREEN;
@@ -1149,977 +708,30 @@ public final class MatchManager implements Listener {
         };
     }
 
-    private UUID findTeamIdByColor(
-            Map<UUID, String> teamIdToColor,
-            String targetColorHex
-    ) {
-        for (Map.Entry<UUID, String> entry :
-                teamIdToColor.entrySet()) {
-
-            if (entry.getValue()
-                    .equalsIgnoreCase(targetColorHex)) {
-
-                return entry.getKey();
-            }
-        }
-
-        return null;
-    }
-
-    private void updateScoreboard() {
-        if (this.scoreboard == null) {
-            return;
-        }
-
-        Objective objective =
-                this.scoreboard.getObjective("tntwars");
-
-        if (objective == null) {
-            return;
-        }
-
-        clearSidebar();
-
-        int score = 15;
-
-        objective.displayName(
-                MiniMessageUtil.deserialize(
-                        "<gradient:#8693AB:#BDD4E7>"
-                                + "ᴛɴᴛᴡᴀʀꜱ"
-                                + "</gradient>"
-                )
-        );
-
-        addLine(
-                objective,
-                "",
-                score--
-        );
-
-        if (this.session != null) {
-            updateMatchScoreboard(
-                    objective,
-                    score
-            );
-        } else {
-            updateLobbyScoreboard(
-                    objective,
-                    score
-            );
-        }
-    }
-
-    private void updateMatchScoreboard(
-            Objective objective,
-            int score
-    ) {
-        MatchSession current = this.session;
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#BDD4E7>Time"
-                                + "<#8693AB> >"
-                                + "<#BDD4E7> "
-                                + remainingSeconds(current)
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                "",
-                score--
-        );
-
-        Map<UUID, String> teamIdToColor =
-                new HashMap<>();
-
-        for (UUID teamId :
-                current.teamIds()) {
-
-            RuntimeTeam team =
-                    this.runtimeTeams.get(teamId);
-
-            if (team != null) {
-                teamIdToColor.put(
-                        teamId,
-                        team.configuredTeam().color()
-                );
-            }
-        }
-
-        UUID roseTeamId =
-                findTeamIdByColor(
-                        teamIdToColor,
-                        "#FF55FF"
-                );
-
-        int aliveRose =
-                roseTeamId == null
-                        ? 0
-                        : current.aliveCount(
-                        roseTeamId
-                );
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#FF55FF>Rose"
-                                + "<#BDD4E7> "
-                                + aliveRose
-                ),
-                score--
-        );
-
-        UUID aquaTeamId =
-                findTeamIdByColor(
-                        teamIdToColor,
-                        "#55FFFF"
-                );
-
-        int aliveAqua =
-                aquaTeamId == null
-                        ? 0
-                        : current.aliveCount(
-                        aquaTeamId
-                );
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#55FFFF>Aqua"
-                                + "<#BDD4E7> "
-                                + aliveAqua
-                ),
-                score--
-        );
-
-        UUID limeTeamId =
-                findTeamIdByColor(
-                        teamIdToColor,
-                        "#55FF55"
-                );
-
-        int aliveLime =
-                limeTeamId == null
-                        ? 0
-                        : current.aliveCount(
-                        limeTeamId
-                );
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#55FF55>Lime"
-                                + "<#BDD4E7> "
-                                + aliveLime
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                "",
-                score--
-        );
-
-        double avgPing = 0.0;
-
-        int playerCount =
-                Bukkit.getOnlinePlayers().size();
-
-        if (playerCount > 0) {
-            int totalPing = 0;
-
-            for (Player player :
-                    Bukkit.getOnlinePlayers()) {
-
-                totalPing += player.getPing();
-            }
-
-            avgPing =
-                    totalPing / (double) playerCount;
-        }
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#BDD4E7>🌍  EU"
-                                + "<#8693AB> ("
-                                + "<#BDD4E7>"
-                                + Math.round(avgPing)
-                                + "ms"
-                                + "<#8693AB>)"
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                "",
-                score
-        );
-    }
-
-    private void updateLobbyScoreboard(
-            Objective objective,
-            int score
-    ) {
-        String division =
-                getDivision();
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#BDD4E7>Division"
-                                + "<#8693AB> > "
-                                + division
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                "",
-                score--
-        );
-
-        UUID captainUUID =
-                getCaptainUUID();
-
-        String captainName =
-                getCaptainName();
-
-        if (captainUUID != null) {
-            addLine(
-                    objective,
-                    MiniMessageUtil.deserialize(
-                            "- <head:"
-                                    + captainUUID
-                                    + "> "
-                                    + captainName
-                    ),
-                    score--
-            );
-        } else {
-            addLine(
-                    objective,
-                    "- Captain",
-                    score--
-            );
-        }
-
-        List<UUID> playerUUIDs =
-                getPlayerUUIDs();
-
-        List<String> playerNames =
-                getPlayerNames();
-
-        for (int i = 0; i < 2; i++) {
-            if (i < playerUUIDs.size()
-                    && i < playerNames.size()) {
-
-                addLine(
-                        objective,
-                        MiniMessageUtil.deserialize(
-                                "- <head:"
-                                        + playerUUIDs.get(i)
-                                        + "> "
-                                        + playerNames.get(i)
-                        ),
-                        score--
-                );
-
-            } else {
-                addLine(
-                        objective,
-                        "-",
-                        score--
-                );
-            }
-        }
-
-        addLine(
-                objective,
-                "",
-                score--
-        );
-
-        double avgPing = 0.0;
-
-        int playerCount =
-                Bukkit.getOnlinePlayers().size();
-
-        if (playerCount > 0) {
-            int totalPing = 0;
-
-            for (Player player :
-                    Bukkit.getOnlinePlayers()) {
-
-                totalPing += player.getPing();
-            }
-
-            avgPing =
-                    totalPing / (double) playerCount;
-        }
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#BDD4E7>🌍  EU"
-                                + "<#8693AB> ("
-                                + "<#BDD4E7>"
-                                + Math.round(avgPing)
-                                + "ms"
-                                + "<#8693AB>)"
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                "",
-                score
-        );
-    }
-
-    private void updateFinishedScoreboard(
-            MatchSession finished,
-            String winner
-    ) {
-        if (this.scoreboard == null) {
-            return;
-        }
-
-        Objective objective =
-                this.scoreboard.getObjective("tntwars");
-
-        if (objective == null) {
-            return;
-        }
-
-        clearSidebar();
-
-        int score = 15;
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<gradient:#8693AB:#BDD4E7>"
-                                + "ᴛɴᴛᴡᴀʀꜱ"
-                                + "</gradient>"
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#BDD4E7>Finished"
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                MiniMessageUtil.deserialize(
-                        "<#BDD4E7>Winner: "
-                                + winner
-                ),
-                score--
-        );
-
-        addLine(
-                objective,
-                "",
-                score--
-        );
-
-        for (UUID teamId :
-                finished.teamIds()) {
-
-            RuntimeTeam team =
-                    this.runtimeTeams.get(teamId);
-
-            String name =
-                    team == null
-                            ? teamId.toString()
-                            .substring(0, 8)
-                            : team.name();
-
-            String color =
-                    team == null
-                            ? "#FFFFFF"
-                            : team.configuredTeam().color();
-
-            addLine(
-                    objective,
-                    MiniMessageUtil.deserialize(
-                            "<"
-                                    + color
-                                    + ">"
-                                    + name
-                                    + "</"
-                                    + color
-                                    + ">"
-                                    + "<#FFFFFF> K:"
-                                    + finished.kills(teamId)
-                    ),
-                    score--
-            );
-        }
-    }
-
-    private String getDivision() {
-        return "Diamond";
-    }
-
-    private UUID getCaptainUUID() {
-        Collection<? extends Player> players =
-                Bukkit.getOnlinePlayers();
-
-        if (!players.isEmpty()) {
-            return players.iterator()
-                    .next()
-                    .getUniqueId();
-        }
-
-        return null;
-    }
-
-    private String getCaptainName() {
-        Collection<? extends Player> players =
-                Bukkit.getOnlinePlayers();
-
-        if (!players.isEmpty()) {
-            return players.iterator()
-                    .next()
-                    .getName();
-        }
-
-        return "Captain";
-    }
-
-    private List<UUID> getPlayerUUIDs() {
-        List<UUID> uuids =
-                new ArrayList<>();
-
-        for (Player player :
-                Bukkit.getOnlinePlayers()) {
-
-            uuids.add(
-                    player.getUniqueId()
-            );
-
-            if (uuids.size() >= 2) {
-                break;
-            }
-        }
-
-        return uuids;
-    }
-
-    private List<String> getPlayerNames() {
-        List<String> names =
-                new ArrayList<>();
-
-        for (Player player :
-                Bukkit.getOnlinePlayers()) {
-
-            names.add(
-                    player.getName()
-            );
-
-            if (names.size() >= 2) {
-                break;
-            }
-        }
-
-        return names;
-    }
-
-    private void clearSidebar() {
-        for (String entry :
-                new ArrayList<>(
-                        this.scoreboard.getEntries()
-                )) {
-
-            this.scoreboard.resetScores(entry);
-        }
-    }
-
-    /**
-     * Converts an Adventure Component into a legacy String
-     * usable by the Bukkit scoreboard API.
-     */
-    private static void addLine(
-            Objective objective,
-            Component component,
-            int score
-    ) {
-        String text =
-                LegacyComponentSerializer
-                        .legacySection()
-                        .serialize(component);
-
-        addLine(
-                objective,
-                text,
-                score
-        );
-    }
-
-    private static void addLine(
-            Objective objective,
-            String text,
-            int score
-    ) {
-        if (text == null) {
-            text = "";
-        }
-
-        /*
-         * Scoreboard entries must be unique.
-         *
-         * The invisible color suffix makes otherwise identical
-         * lines unique without changing their visible content.
-         */
-        ChatColor uniqueColor =
-                ChatColor.values()[
-                        Math.max(
-                                0,
-                                Math.min(
-                                        15,
-                                        score
-                                )
-                        )
-                        ];
-
-        objective.getScore(
-                text + uniqueColor
-        ).setScore(score);
-    }
-
-    private int remainingSeconds(
-            MatchSession current
-    ) {
-        int timeout =
-                this.plugin.getConfig().getInt(
-                        ARENA_TIMEOUT_KEY,
-                        300
-                );
-
-        long elapsed =
-                java.time.Duration.between(
-                        current.startedAt(),
-                        Instant.now()
-                ).toSeconds();
-
-        return (int) Math.max(
-                0,
-                timeout - elapsed
-        );
-    }
-
-    private String winnerName(
-            MatchSession finished
-    ) {
+    private String winnerName(MatchSession finished) {
         return finished.winnerTeamId()
                 .map(teamId -> {
-                    RuntimeTeam team =
-                            this.runtimeTeams.get(teamId);
-
+                    RuntimeTeam team = this.runtimeTeams.get(teamId);
                     if (team == null) {
                         return teamId.toString();
                     }
-
-                    String color =
-                            team.configuredTeam().color();
-
-                    return "<"
-                            + color
-                            + ">"
-                            + team.name()
-                            + "</"
-                            + color
-                            + ">";
+                    String color = team.configuredTeam().color();
+                    return "<" + color + ">" + team.name() + "</" + color + ">";
                 })
                 .orElse("none");
     }
 
-    private void giveKit(Player player) {
-        PlayerInventory inventory =
-                player.getInventory();
-
-        inventory.clear();
-
-        var armor =
-                this.plugin.getConfig()
-                        .getConfigurationSection(
-                                "kit.armor"
-                        );
-
-        if (armor != null) {
-            inventory.setHelmet(
-                    item(
-                            armor.getString("helmet"),
-                            1,
-                            null
-                    )
-            );
-
-            inventory.setChestplate(
-                    item(
-                            armor.getString("chestplate"),
-                            1,
-                            null
-                    )
-            );
-
-            inventory.setLeggings(
-                    item(
-                            armor.getString("leggings"),
-                            1,
-                            null
-                    )
-            );
-
-            inventory.setBoots(
-                    item(
-                            armor.getString("boots"),
-                            1,
-                            null
-                    )
-            );
-        }
-
-        for (Map<?, ?> raw :
-                this.plugin.getConfig()
-                        .getMapList("kit.inventory")) {
-
-            int slot = (int) number(
-                    raw,
-                    "slot",
-                    -1
-            );
-
-            if (slot < 0
-                    || slot >= inventory.getSize()) {
-                continue;
-            }
-
-            String material =
-                    text(
-                            raw,
-                            "material",
-                            "AIR"
-                    );
-
-            int amount = Math.max(
-                    1,
-                    Math.min(
-                            64,
-                            (int) number(
-                                    raw,
-                                    "amount",
-                                    1
-                            )
-                    )
-            );
-
-            inventory.setItem(
-                    slot,
-                    item(
-                            material,
-                            amount,
-                            raw.get("enchantments")
-                    )
-            );
-        }
-
-        player.updateInventory();
+    private record TeamColor(String key, String displayName, String chatColor) {
     }
 
-    private ItemStack item(
-            String materialName,
-            int amount,
-            Object enchantments
-    ) {
-        if (materialName == null) {
-            return null;
+    private record TntBlockKey(UUID worldId, int x, int y, int z) {
+        private static TntBlockKey of(Block block) {
+            return new TntBlockKey(block.getWorld().getUID(), block.getX(), block.getY(), block.getZ());
         }
 
-        Material material =
-                Material.matchMaterial(
-                        materialName
-                );
-
-        if (material == null
-                || material == Material.AIR) {
-            return null;
-        }
-
-        ItemStack stack =
-                new ItemStack(
-                        material,
-                        amount
-                );
-
-        if (enchantments instanceof Map<?, ?> map
-                && !map.isEmpty()) {
-
-            ItemMeta meta =
-                    stack.getItemMeta();
-
-            if (meta != null) {
-                for (Map.Entry<?, ?> entry :
-                        map.entrySet()) {
-
-                    Enchantment enchantment =
-                            Enchantment.getByKey(
-                                    NamespacedKey.minecraft(
-                                            String.valueOf(
-                                                    entry.getKey()
-                                            ).toLowerCase(
-                                                    Locale.ROOT
-                                            )
-                                    )
-                            );
-
-                    if (enchantment != null
-                            && entry.getValue()
-                            instanceof Number level) {
-
-                        meta.addEnchant(
-                                enchantment,
-                                Math.max(
-                                        1,
-                                        level.intValue()
-                                ),
-                                true
-                        );
-                    }
-                }
-
-                stack.setItemMeta(meta);
-            }
-        }
-
-        return stack;
-    }
-
-    private Location snapLocation(
-            Location spawned
-    ) {
-        TntBlockKey key =
-                TntBlockKey.of(spawned);
-
-        Location target =
-                this.pendingTntSnaps.remove(key);
-
-        if (target != null) {
-            return target;
-        }
-
-        return new Location(
-                spawned.getWorld(),
-                spawned.getBlockX() + 0.5,
-                spawned.getBlockY(),
-                spawned.getBlockZ() + 0.5,
-                spawned.getYaw(),
-                spawned.getPitch()
-        );
-    }
-
-    private static Location centerOf(
-            Block block
-    ) {
-        return new Location(
-                block.getWorld(),
-                block.getX() + 0.5,
-                block.getY(),
-                block.getZ() + 0.5
-        );
-    }
-
-    private static UUID attackerId(
-            org.bukkit.entity.Entity damager
-    ) {
-        if (damager instanceof Player player) {
-            return player.getUniqueId();
-        }
-
-        if (damager instanceof Projectile projectile
-                && projectile.getShooter()
-                instanceof Player player) {
-
-            return player.getUniqueId();
-        }
-
-        return null;
-    }
-
-    private void scheduleLobbyReturnAndShutdown() {
-        int delaySeconds =
-                this.plugin.getConfig().getInt(
-                        FINISH_DELAY_KEY,
-                        5
-                );
-
-        this.shutdownTaskId =
-                Bukkit.getScheduler()
-                        .runTaskLater(
-                                this.plugin,
-                                () -> {
-                                    String lobby =
-                                            this.plugin.getConfig()
-                                                    .getString(
-                                                            FINISH_LOBBY_KEY,
-                                                            "lobby"
-                                                    );
-
-                                    for (Player player :
-                                            Bukkit.getOnlinePlayers()) {
-
-                                        sendToLobby(
-                                                player,
-                                                lobby
-                                        );
-                                    }
-
-                                    Bukkit.getScheduler()
-                                            .runTaskLater(
-                                                    this.plugin,
-                                                    Bukkit::shutdown,
-                                                    20L
-                                            );
-                                },
-                                Math.max(
-                                        0,
-                                        delaySeconds
-                                ) * 20L
-                        )
-                        .getTaskId();
-    }
-
-    private void sendToLobby(
-            Player player,
-            String lobby
-    ) {
-        try (
-                ByteArrayOutputStream bytes =
-                        new ByteArrayOutputStream();
-
-                DataOutputStream out =
-                        new DataOutputStream(bytes)
-        ) {
-            out.writeUTF("Connect");
-            out.writeUTF(lobby);
-
-            player.sendPluginMessage(
-                    this.plugin,
-                    BUNGEE_CHANNEL,
-                    bytes.toByteArray()
-            );
-
-        } catch (IOException e) {
-            this.plugin.getLogger().warning(
-                    "Could not send "
-                            + player.getName()
-                            + " to lobby: "
-                            + e.getMessage()
-            );
-        }
-    }
-
-    private void cancelTasks() {
-        if (this.timeoutTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(
-                    this.timeoutTaskId
-            );
-
-            this.timeoutTaskId = -1;
-        }
-
-        if (this.shutdownTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(
-                    this.shutdownTaskId
-            );
-
-            this.shutdownTaskId = -1;
-        }
-    }
-
-    private static TeamColor colorOf(
-            String configured
-    ) {
-        String key =
-                configured
-                        .toLowerCase(Locale.ROOT)
-                        .replace('-', '_')
-                        .replace(' ', '_');
-
-        for (TeamColor color :
-                DEFAULT_COLORS) {
-
-            if (color.key().equals(key)) {
-                return color;
-            }
-        }
-
-        return DEFAULT_COLORS.getFirst();
-    }
-
-    private record ConfiguredTeam(
-            String key,
-            String displayName,
-            String color,
-            List<Location> spawns
-    ) {
-    }
-
-    private record RuntimeTeam(
-            String name,
-            ConfiguredTeam configuredTeam,
-            Team scoreboardTeam
-    ) {
-    }
-
-    private record TeamColor(
-            String key,
-            String displayName,
-            String chatColor
-    ) {
-    }
-
-    private record TntBlockKey(
-            UUID worldId,
-            int x,
-            int y,
-            int z
-    ) {
-        private static TntBlockKey of(
-                Block block
-        ) {
-            return new TntBlockKey(
-                    block.getWorld().getUID(),
-                    block.getX(),
-                    block.getY(),
-                    block.getZ()
-            );
-        }
-
-        private static TntBlockKey of(
-                Location location
-        ) {
-            return new TntBlockKey(
-                    location.getWorld().getUID(),
-                    location.getBlockX(),
-                    location.getBlockY(),
-                    location.getBlockZ()
-            );
+        private static TntBlockKey of(Location location) {
+            return new TntBlockKey(location.getWorld().getUID(),
+                    location.getBlockX(), location.getBlockY(), location.getBlockZ());
         }
     }
 }
-
