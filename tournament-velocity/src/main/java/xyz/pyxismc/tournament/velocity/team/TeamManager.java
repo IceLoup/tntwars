@@ -16,6 +16,9 @@ import xyz.pyxismc.tournament.common.model.TeamPlayer;
 import xyz.pyxismc.tournament.velocity.config.TournamentConfig;
 import xyz.pyxismc.tournament.velocity.event.TeamCreatedEvent;
 import xyz.pyxismc.tournament.velocity.event.TeamDisbandedEvent;
+import xyz.pyxismc.tournament.velocity.event.TeamInviteEvent;
+import xyz.pyxismc.tournament.velocity.event.TeamJoinEvent;
+import xyz.pyxismc.tournament.velocity.event.TeamLeaveEvent;
 import xyz.pyxismc.tournament.velocity.event.TournamentEventBus;
 
 /**
@@ -113,6 +116,7 @@ public final class TeamManager {
         if (!invites.add(targetPlayerId)) {
             throw new TeamException("This player already has a pending invitation from your team.");
         }
+        this.eventBus.fire(new TeamInviteEvent(team, captainId, targetPlayerId));
     }
 
     /** A player accepts a pending invitation and joins the team. */
@@ -135,6 +139,7 @@ public final class TeamManager {
         Team updated = team.withPlayers(updatedPlayers);
         this.teams.put(team.id(), updated);
         this.playerToTeam.put(player.uuid(), team.id());
+        this.eventBus.fire(new TeamJoinEvent(updated, player.uuid()));
         return updated;
     }
 
@@ -150,6 +155,7 @@ public final class TeamManager {
                 .toList();
         this.teams.put(team.id(), team.withPlayers(updatedPlayers));
         this.playerToTeam.remove(player.uuid());
+        this.eventBus.fire(new TeamLeaveEvent(team.withPlayers(updatedPlayers), player.uuid()));
     }
 
     /** The captain disbands their team; all members are freed. */

@@ -13,12 +13,17 @@ ARG PAPER_URL=https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419
 
 WORKDIR /server
 
-# Config and plugins copied at build time
+# Config, plugins, and the pre-built arena world copied at build time
 COPY server.properties server.properties
 COPY eula.txt eula.txt
 COPY ops.json ops.json
 COPY config/ config/
 COPY plugins/ plugins/
+# The arena map (level-name=arena in server.properties) is baked into the
+# image so every match container starts with the real custom terrain. The
+# plugin (arena.world: arena in plugins/tournament/config.yml) finds it already
+# loaded by Bukkit and uses it as-is instead of generating a void world.
+COPY arena/ arena/
 
 # Download Paper jar
 RUN apt-get update \

@@ -111,3 +111,11 @@ buildNumber.properties
 
 # Common working directory
 run/
+
+# Arena world runtime junk (never commit machine-specific/lock files)
+templates/gameserver/arena/session.lock
+templates/gameserver/arena/level.dat_old
+templates/gameserver/arena/stats/
+templates/gameserver/arena/advancements/
+templates/gameserver/arena/playerdata/
+templates/gameserver/arena/lunar_hosted_world_data.json

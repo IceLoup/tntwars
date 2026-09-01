@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import xyz.pyxismc.tournament.common.message.JsonCodec;
+import xyz.pyxismc.tournament.common.message.LobbyTeamSyncMessage;
 import xyz.pyxismc.tournament.common.message.MatchStartMessage;
 import xyz.pyxismc.tournament.common.message.MessageChannels;
 import xyz.pyxismc.tournament.common.redis.JedisTournamentRedis;
@@ -48,6 +49,8 @@ public final class TournamentPaperPlugin extends JavaPlugin {
                     + ", waiting for match instructions on '" + serverId + "'");
             // Signal that this server is ready to receive players
             this.redis.publish(MessageChannels.MATCH_READY_FOR_PLAYERS, serverId);
+            // Keep the lobby scoreboard in sync with the teams managed on Velocity
+            this.redis.subscribe(MessageChannels.LOBBY_TEAM_SYNC, this::onLobbyTeamSync);
         } catch (Exception e) {
             getLogger().warning("Redis unavailable, match execution disabled: " + e.getMessage());
         }
@@ -106,6 +109,19 @@ public final class TournamentPaperPlugin extends JavaPlugin {
             Bukkit.getScheduler().runTask(this, () -> this.matchManager.startMatch(message));
         } catch (RuntimeException e) {
             getLogger().warning("Malformed match-start message ignored: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Called from the Redis subscriber thread when Velocity publishes the
+     * lobby team state; dispatches to the main thread to update the scoreboard.
+     */
+    private void onLobbyTeamSync(String payload) {
+        try {
+            LobbyTeamSyncMessage message = new JsonCodec().fromJson(payload, LobbyTeamSyncMessage.class);
+            Bukkit.getScheduler().runTask(this, () -> this.matchManager.applyLobbyTeamSync(message));
+        } catch (RuntimeException e) {
+            getLogger().warning("Malformed lobby team sync ignored: " + e.getMessage());
         }
     }
 

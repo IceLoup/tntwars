@@ -18,28 +18,30 @@ arena:
     power: 3.0
     fire: false
     break-blocks: false
-  # Three team slots, in match-team order. The premade lobby teams keep their
-  # composition and are assigned to these slots in the order Velocity sends
-  # them. Each slot defines one spawn per player of the team (3 players).
+# Three team slots, in match-team order. The premade lobby teams keep their
+# composition and are assigned to these slots in the order Velocity sends
+# them. Each slot defines one spawn per player of the team (3 players).
+# The arena is a 3-team triangle map: each 25x25 platform has its top at
+# y=130 (spawn feet at y=131) -- West (12,12), North (37,55), East (62,12).
   teams:
     - color: aqua
       display-name: Aqua
       spawns:
-        - { x: -1.5, y: 64.0, z: -41.5, yaw: 0.0, pitch: 0.0 }
-        - { x: 0.0,  y: 64.0, z: -40.0, yaw: 0.0, pitch: 0.0 }
-        - { x: 1.5,  y: 64.0, z: -41.5, yaw: 0.0, pitch: 0.0 }
+        - { x: 12.5, y: 131.0, z: 12.5, yaw: 300.0, pitch: 0.0 }
+        - { x: 10.5, y: 131.0, z: 14.5, yaw: 300.0, pitch: 0.0 }
+        - { x: 14.5,  y: 131.0, z: 14.5, yaw: 300.0, pitch: 0.0 }
     - color: rose_pastel
       display-name: Rose Pastel
       spawns:
-        - { x: -36.5, y: 64.0, z: 18.5, yaw: 225.0, pitch: 0.0 }
-        - { x: -35.0, y: 64.0, z: 20.0, yaw: 225.0, pitch: 0.0 }
-        - { x: -33.5, y: 64.0, z: 21.5, yaw: 225.0, pitch: 0.0 }
+        - { x: 37.5, y: 131.0, z: 55.5, yaw: 180.0, pitch: 0.0 }
+        - { x: 39.5, y: 131.0, z: 53.5, yaw: 180.0, pitch: 0.0 }
+        - { x: 35.5, y: 131.0, z: 53.5, yaw: 180.0, pitch: 0.0 }
     - color: lime
       display-name: Lime
       spawns:
-        - { x: 33.5, y: 64.0, z: 18.5, yaw: 135.0, pitch: 0.0 }
-        - { x: 35.0, y: 64.0, z: 20.0, yaw: 135.0, pitch: 0.0 }
-        - { x: 36.5, y: 64.0, z: 21.5, yaw: 135.0, pitch: 0.0 }
+        - { x: 62.5, y: 131.0, z: 12.5, yaw: 60.0,  pitch: 0.0 }
+        - { x: 64.5, y: 131.0, z: 14.5, yaw: 60.0,  pitch: 0.0 }
+        - { x: 60.5, y: 131.0, z: 14.5, yaw: 60.0,  pitch: 0.0 }
 
 # TNTWars kit given to every player on spawn. Enchantment values are vanilla
 # registry keys mapped to levels. No armor is given in this mode.

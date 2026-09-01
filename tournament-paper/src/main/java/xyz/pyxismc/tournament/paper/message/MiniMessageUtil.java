@@ -2,12 +2,10 @@ package xyz.pyxismc.tournament.paper.message;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-
-import java.util.function.Supplier;
 
 public final class MiniMessageUtil {
 
@@ -21,18 +19,18 @@ public final class MiniMessageUtil {
     public static final String INFO = "#55FFFF";
     public static final String MUTED = "#888888";
 
-    private static String serverName = "Unknown";
-    private static String tournamentName = "Tournament";
+    private static volatile String serverName = "Unknown";
+    private static volatile String tournamentName = "Tournament";
 
     private MiniMessageUtil() {
     }
 
     public static void setServerName(String name) {
-        serverName = name;
+        serverName = name == null || name.isBlank() ? "Unknown" : name;
     }
 
     public static void setTournamentName(String name) {
-        tournamentName = name;
+        tournamentName = name == null || name.isBlank() ? "Tournament" : name;
     }
 
     public static String getServerName() {
@@ -43,68 +41,101 @@ public final class MiniMessageUtil {
         return tournamentName;
     }
 
+    /**
+     * Deserializes a MiniMessage string and automatically adds the
+     * global placeholders.
+     */
     public static Component deserialize(String input, TagResolver... resolvers) {
+        if (input == null || input.isEmpty()) {
+            return Component.empty();
+        }
+
         return MINI_MESSAGE.deserialize(input, addPlaceholders(resolvers));
     }
 
     public static void send(Player player, String input, TagResolver... resolvers) {
+        if (player == null) {
+            return;
+        }
+
         player.sendMessage(deserialize(input, resolvers));
     }
 
     public static void sendError(Player player, String message) {
-        send(player, "<" + ERROR + ">Error: </" + ERROR + ">" + message);
+        send(player, color(ERROR, "Error: ") + message);
     }
 
     public static void sendSuccess(Player player, String message) {
-        send(player, "<" + SUCCESS + ">" + message);
+        send(player, color(SUCCESS, message));
     }
 
     public static void sendInfo(Player player, String message) {
-        send(player, "<" + INFO + ">" + message);
+        send(player, color(INFO, message));
     }
 
     public static void sendWarning(Player player, String message) {
-        send(player, "<" + WARNING + ">" + message);
+        send(player, color(WARNING, message));
     }
 
     public static String primary(String text) {
-        return "<" + PRIMARY + ">" + text + "</" + PRIMARY + ">";
+        return color(PRIMARY, text);
     }
 
     public static String secondary(String text) {
-        return "<" + SECONDARY + ">" + text + "</" + SECONDARY + ">";
+        return color(SECONDARY, text);
     }
 
     public static String error(String text) {
-        return "<" + ERROR + ">" + text + "</" + ERROR + ">";
+        return color(ERROR, text);
     }
 
     public static String success(String text) {
-        return "<" + SUCCESS + ">" + text + "</" + SUCCESS + ">";
+        return color(SUCCESS, text);
     }
 
     public static String warning(String text) {
-        return "<" + WARNING + ">" + text + "</" + WARNING + ">";
+        return color(WARNING, text);
     }
 
     public static String info(String text) {
-        return "<" + INFO + ">" + text + "</" + INFO + ">";
+        return color(INFO, text);
     }
 
     public static String muted(String text) {
-        return "<" + MUTED + ">" + text + "</" + MUTED + ">";
+        return color(MUTED, text);
     }
 
     public static String gradient(String text) {
-        return "<gradient:" + PRIMARY + ":" + SECONDARY + ">" + text + "</gradient>";
+        return "<gradient:" + PRIMARY + ":" + SECONDARY + ">"
+                + text
+                + "</gradient>";
+    }
+
+    private static String color(String color, String text) {
+        return "<" + color + ">" + (text == null ? "" : text);
     }
 
     private static TagResolver[] addPlaceholders(TagResolver... custom) {
-        TagResolver[] combined = new TagResolver[custom.length + 3];
-        System.arraycopy(custom, 0, combined, 0, custom.length);
-        combined[custom.length] = Placeholder.unparsed("server_name", serverName);
-        combined[custom.length + 1] = Placeholder.unparsed("tournament_name", tournamentName);
-        combined[custom.length + 2] = Placeholder.unparsed("online_players", String.valueOf(Bukkit.getOnlinePlayers().size()));
+        int customLength = custom == null ? 0 : custom.length;
+
+        TagResolver[] combined = new TagResolver[customLength + 3];
+
+        if (customLength > 0) {
+            System.arraycopy(custom, 0, combined, 0, customLength);
+        }
+
+        combined[customLength] =
+                Placeholder.unparsed("server_name", serverName);
+
+        combined[customLength + 1] =
+                Placeholder.unparsed("tournament_name", tournamentName);
+
+        combined[customLength + 2] =
+                Placeholder.unparsed(
+                        "online_players",
+                        String.valueOf(Bukkit.getOnlinePlayers().size())
+                );
+
         return combined;
     }
 
@@ -117,6 +148,10 @@ public final class MiniMessageUtil {
     }
 
     public static TagResolver playerCountPlaceholder() {
-        return Placeholder.unparsed("online_players", String.valueOf(Bukkit.getOnlinePlayers().size()));
+        return Placeholder.unparsed(
+                "online_players",
+                String.valueOf(Bukkit.getOnlinePlayers().size())
+        );
     }
 }
+

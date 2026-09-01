@@ -18,6 +18,9 @@ import xyz.pyxismc.tournament.common.model.TeamPlayer;
 import xyz.pyxismc.tournament.velocity.config.TournamentConfig;
 import xyz.pyxismc.tournament.velocity.event.TeamCreatedEvent;
 import xyz.pyxismc.tournament.velocity.event.TeamDisbandedEvent;
+import xyz.pyxismc.tournament.velocity.event.TeamInviteEvent;
+import xyz.pyxismc.tournament.velocity.event.TeamJoinEvent;
+import xyz.pyxismc.tournament.velocity.event.TeamLeaveEvent;
 import xyz.pyxismc.tournament.velocity.testutil.FakeEventBus;
 
 class TeamManagerTest {
@@ -127,6 +130,8 @@ class TeamManagerTest {
         assertEquals(2, updated.players().size());
         assertEquals(TeamRole.MEMBER, updated.players().get(1).role());
         assertTrue(this.manager.teamOfPlayer(member.uuid()).isPresent());
+        assertEquals(1, this.eventBus.count(TeamInviteEvent.class));
+        assertEquals(1, this.eventBus.count(TeamJoinEvent.class));
 
         TeamException again = assertThrows(TeamException.class, () -> this.manager.acceptInvite(member, team.id()));
         assertTrue(again.getMessage().contains("already in a team"));
@@ -198,6 +203,7 @@ class TeamManagerTest {
         Team remaining = this.manager.getTeam(team.id()).orElseThrow();
         assertEquals(1, remaining.players().size());
         assertEquals(captain.uuid(), remaining.captainId());
+        assertEquals(1, this.eventBus.count(TeamLeaveEvent.class));
     }
 
     @Test

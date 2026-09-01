@@ -27,6 +27,9 @@ public final class MessageChannels {
     /** Pub/Sub channel on which Paper match servers report final results. */
     public static final String MATCH_RESULT = "tournament:match-result";
 
+    /** Pub/Sub channel on which Velocity pushes the full lobby team state to Paper. */
+    public static final String LOBBY_TEAM_SYNC = "tournament:lobby-team-sync";
+
     private MessageChannels() {
     }
 

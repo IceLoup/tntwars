@@ -61,6 +61,7 @@ import xyz.pyxismc.tournament.velocity.provision.SimulatedProvisioner;
 import xyz.pyxismc.tournament.velocity.round.DefaultRoundStrategy;
 import xyz.pyxismc.tournament.velocity.round.RoundManager;
 import xyz.pyxismc.tournament.velocity.team.TeamManager;
+import xyz.pyxismc.tournament.velocity.team.LobbyTeamSync;
 import xyz.pyxismc.tournament.velocity.tournament.TournamentException;
 import xyz.pyxismc.tournament.velocity.tournament.TournamentManager;
 
@@ -138,6 +139,7 @@ private HikariDataSource dataSource;
         initPersistence();
         this.snapshotBuilder = new TournamentSnapshotBuilder(this.teamManager, this.roundManager);
         initRedis();
+        initLobbyTeamSync();
         this.eventBus.subscribe(MatchProvisionedEvent.class, this::onMatchProvisioned);
         this.eventBus.subscribe(MatchFinishedEvent.class, this.matchServerLifecycle::onMatchFinished);
         this.eventBus.subscribe(MatchFailedEvent.class, this.matchServerLifecycle::onMatchFailed);
@@ -237,6 +239,15 @@ this.redis.subscribe(MessageChannels.MATCH_READY, this::onMatchReady);
                 this.redis = null;
             }
         }
+    }
+
+    private void initLobbyTeamSync() {
+        if (this.redis == null) {
+            this.logger.warn("Redis unavailable, lobby team scoreboard sync disabled");
+            return;
+        }
+        new LobbyTeamSync(this.proxy, this.teamManager, this.redis, this.eventBus, this.jsonCodec);
+        this.logger.info("Lobby team scoreboard sync enabled");
     }
 
     private void onMatchProvisioned(MatchProvisionedEvent event) {
