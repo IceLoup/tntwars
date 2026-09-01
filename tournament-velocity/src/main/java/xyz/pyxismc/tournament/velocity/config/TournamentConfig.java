@@ -23,8 +23,8 @@ public final class TournamentConfig {
     /** Tournament rules. */
     public record TournamentSettings(int maxTeamsPerMatch, int playersPerTeam) {
         public TournamentSettings {
-            if (maxTeamsPerMatch < 1) {
-                throw new IllegalArgumentException("maxTeamsPerMatch must be >= 1");
+            if (maxTeamsPerMatch < 2) {
+                throw new IllegalArgumentException("maxTeamsPerMatch must be >= 2");
             }
             if (playersPerTeam < 1) {
                 throw new IllegalArgumentException("playersPerTeam must be >= 1");
