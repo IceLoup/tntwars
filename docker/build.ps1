@@ -48,6 +48,7 @@ New-Item -ItemType Directory -Force templates/lobby/plugins | Out-Null
 
 Copy-Item tournament-velocity/target/tournament-velocity-1.0.0-SNAPSHOT.jar templates/proxy/plugins/ -Force
 Copy-Item tournament-paper/target/tournament-paper-1.0.0-SNAPSHOT.jar templates/gameserver/plugins/ -Force
+Copy-Item tournament-paper/target/tournament-paper-1.0.0-SNAPSHOT.jar templates/lobby/plugins/ -Force
 
 Write-Host "==> Building template images (tag: $fullTag)"
 

@@ -12,7 +12,7 @@ server:
     port: 25565
     command: docker
 redis:
-  host: redis-1
+  host: redis
   port: 6379
   password: ""
 database:

@@ -227,9 +227,19 @@ public final class TournamentConfig {
         String dockerCommand = dockerNode.node("command").getString(defaults.server().docker().command());
 
         ConfigurationNode redisNode = node.node("redis");
-        String redisHost = redisNode.node("host").getString(defaults.redis().host());
-        int redisPort = redisNode.node("port").getInt(defaults.redis().port());
-        String redisPassword = redisNode.node("password").getString(defaults.redis().password());
+        // Environment variables take precedence over config file.
+        String redisHost = System.getenv("REDIS_HOST");
+        if (redisHost == null || redisHost.isBlank()) {
+            redisHost = redisNode.node("host").getString(defaults.redis().host());
+        }
+        String redisPortEnv = System.getenv("REDIS_PORT");
+        int redisPort = redisPortEnv != null && !redisPortEnv.isBlank()
+                ? Integer.parseInt(redisPortEnv)
+                : redisNode.node("port").getInt(defaults.redis().port());
+        String redisPassword = System.getenv("REDIS_PASSWORD");
+        if (redisPassword == null) {
+            redisPassword = redisNode.node("password").getString(defaults.redis().password());
+        }
 
         ConfigurationNode databaseNode = node.node("database");
         String dbHost = databaseNode.node("host").getString(defaults.database().host());

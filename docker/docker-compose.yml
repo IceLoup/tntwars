@@ -42,6 +42,9 @@ services:
       - "2920:2920"
     environment:
       DOCKER_HOST: unix:///var/run/docker.sock
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
